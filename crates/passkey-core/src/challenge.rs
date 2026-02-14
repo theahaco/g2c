@@ -42,10 +42,7 @@ impl Challenge {
 
     /// Returns the storage key for this challenge.
     pub fn storage_key(&self) -> String {
-        format!(
-            "challenge:{}:{}",
-            self.contract_id, self.challenge_id
-        )
+        format!("challenge:{}:{}", self.contract_id, self.challenge_id)
     }
 
     /// Checks whether the challenge has expired.

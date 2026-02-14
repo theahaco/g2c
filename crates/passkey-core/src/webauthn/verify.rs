@@ -103,8 +103,7 @@ mod tests {
     use p256::ecdsa::{signature::Signer, SigningKey};
     use sha2::{Digest, Sha256};
 
-    const TEST_CONTRACT_ID: &str =
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
+    const TEST_CONTRACT_ID: &str = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
 
     /// Helper: build a synthetic WebAuthn assertion from a P-256 keypair.
     fn build_assertion(

@@ -43,7 +43,12 @@ fn json_response<T: Serialize>(body: &T, status: u16) -> worker::Result<Response
 }
 
 fn error_response(message: &str, status: u16) -> worker::Result<Response> {
-    json_response(&ErrorResponse { error: message.to_string() }, status)
+    json_response(
+        &ErrorResponse {
+            error: message.to_string(),
+        },
+        status,
+    )
 }
 
 fn get_kv_store(ctx: &RouteContext<()>) -> worker::Result<WorkersKvStore> {

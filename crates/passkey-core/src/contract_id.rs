@@ -59,7 +59,10 @@ mod tests {
 
     #[test]
     fn rejects_invalid_chars() {
-        assert!(validate_contract_id("C000000000000000000000000000000000000000000000000000000").is_err());
+        assert!(
+            validate_contract_id("C000000000000000000000000000000000000000000000000000000")
+                .is_err()
+        );
     }
 
     #[test]

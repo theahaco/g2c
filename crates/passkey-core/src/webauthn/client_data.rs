@@ -124,21 +124,14 @@ mod tests {
         );
         let cd = ClientData::parse(&json).unwrap();
         let err = cd
-            .validate(
-                "correct-challenge",
-                "https://test.sorobancontracts.com",
-            )
+            .validate("correct-challenge", "https://test.sorobancontracts.com")
             .unwrap_err();
         assert!(matches!(err, Error::ChallengeMismatch));
     }
 
     #[test]
     fn rejects_wrong_origin() {
-        let json = make_client_data_json(
-            "webauthn.get",
-            "dGVzdA",
-            "https://evil.example.com",
-        );
+        let json = make_client_data_json("webauthn.get", "dGVzdA", "https://evil.example.com");
         let cd = ClientData::parse(&json).unwrap();
         let err = cd
             .validate("dGVzdA", "https://test.sorobancontracts.com")

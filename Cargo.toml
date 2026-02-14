@@ -4,6 +4,7 @@ members = [
     "crates/passkey-core",
     "crates/passkey-worker",
     "crates/passkey-server",
+    "crates/integration-tests",
     "contracts/smart-account",
     "contracts/webauthn-verifier",
 ]

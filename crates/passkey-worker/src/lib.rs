@@ -6,14 +6,8 @@ mod kv_store;
 fn cors_headers(response: &mut Response) -> worker::Result<()> {
     let headers = response.headers_mut();
     headers.set("Access-Control-Allow-Origin", "*")?;
-    headers.set(
-        "Access-Control-Allow-Methods",
-        "GET, POST, OPTIONS",
-    )?;
-    headers.set(
-        "Access-Control-Allow-Headers",
-        "Content-Type",
-    )?;
+    headers.set("Access-Control-Allow-Methods", "GET, POST, OPTIONS")?;
+    headers.set("Access-Control-Allow-Headers", "Content-Type")?;
     headers.set("Access-Control-Max-Age", "86400")?;
     Ok(())
 }
