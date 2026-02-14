@@ -18,6 +18,11 @@ build:
 build-wasm:
     cargo build -p passkey-worker --target wasm32-unknown-unknown
 
+# Build and optimize Soroban contracts
+build-contracts:
+    stellar contract build --optimize --package g2c-smart-account --profile contract
+    stellar contract build --optimize --package g2c-webauthn-verifier --profile contract
+
 # Run the local Axum dev server on :8787
 serve:
     cargo run -p passkey-server
