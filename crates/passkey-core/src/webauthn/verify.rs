@@ -104,7 +104,7 @@ mod tests {
     use sha2::{Digest, Sha256};
 
     const TEST_CONTRACT_ID: &str =
-        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
+        "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
 
     /// Helper: build a synthetic WebAuthn assertion from a P-256 keypair.
     fn build_assertion(
@@ -179,7 +179,7 @@ mod tests {
         let challenge_b64 = URL_SAFE_NO_PAD.encode(b"test-challenge-32-bytes-padding!");
 
         let request = build_assertion(&signing_key, TEST_CONTRACT_ID, &challenge_b64);
-        let other_contract = "CBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB";
+        let other_contract = "CC53XO53XO53XO53XO53XO53XO53XO53XO53XO53XO53XO53XO53WQD5";
         let err = verify_assertion(other_contract, &challenge_b64, &request).unwrap_err();
         assert!(matches!(err, Error::RpIdMismatch));
     }

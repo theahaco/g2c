@@ -13,6 +13,7 @@ p256 = { version = "0.13", features = ["ecdsa"] }
 sha2 = "0.10"
 getrandom = { version = "0.2", features = ["js"] }
 async-trait = "0.1"
+stellar-strkey = "0.0.16"
 
 [dev-dependencies]
 tokio = { version = "1", features = ["rt", "macros"] }

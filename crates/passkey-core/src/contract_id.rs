@@ -1,32 +1,14 @@
+use stellar_strkey::Contract;
+
 use crate::error::Error;
 
-/// Validates a Stellar Soroban contract ID (C-address).
+/// Validates a Stellar Soroban contract ID (C-address) using stellar-strkey.
 ///
-/// A valid contract ID:
-/// - Starts with 'C'
-/// - Is exactly 56 characters long
-/// - Contains only valid base32 characters (A-Z, 2-7)
+/// Performs full strkey validation: base32 decoding, version byte check,
+/// CRC16 checksum verification, and 32-byte payload length check.
 pub fn validate_contract_id(contract_id: &str) -> Result<(), Error> {
-    if !contract_id.starts_with('C') {
-        return Err(Error::InvalidContractId(
-            "must start with 'C'".to_string(),
-        ));
-    }
-
-    if contract_id.len() != 56 {
-        return Err(Error::InvalidContractId(format!(
-            "must be 56 characters, got {}",
-            contract_id.len()
-        )));
-    }
-
-    // Stellar uses base32 encoding (RFC 4648) for addresses
-    if !contract_id[1..].chars().all(|c| matches!(c, 'A'..='Z' | '2'..='7')) {
-        return Err(Error::InvalidContractId(
-            "contains invalid base32 characters".to_string(),
-        ));
-    }
-
+    Contract::from_string(contract_id)
+        .map_err(|_| Error::InvalidContractId(format!("invalid strkey: {contract_id}")))?;
     Ok(())
 }
 
@@ -34,52 +16,60 @@ pub fn validate_contract_id(contract_id: &str) -> Result<(), Error> {
 mod tests {
     use super::*;
 
+    // Valid contract IDs generated from stellar-strkey (with correct checksums)
+    const VALID_ZEROS: &str = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
+    const VALID_ONES: &str = "CAAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQCAIBAEAQC526";
+
     #[test]
     fn valid_contract_id() {
-        // 'C' + 55 valid base32 chars
-        let id = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-        assert!(validate_contract_id(id).is_ok());
+        assert!(validate_contract_id(VALID_ZEROS).is_ok());
     }
 
     #[test]
-    fn valid_contract_id_mixed_chars() {
-        let id = "CABCDEFGHIJKLMNOPQRSTUVWXYZ234567ABCDEFGHIJKLMNOPQRSTUVW";
-        assert!(validate_contract_id(id).is_ok());
+    fn valid_contract_id_alternate() {
+        assert!(validate_contract_id(VALID_ONES).is_ok());
     }
 
     #[test]
     fn rejects_g_address() {
-        let id = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-        let err = validate_contract_id(id).unwrap_err();
-        assert!(err.to_string().contains("must start with 'C'"));
+        // A G-address is a valid strkey but not a contract
+        let g_addr = "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF";
+        assert!(validate_contract_id(g_addr).is_err());
     }
 
     #[test]
     fn rejects_too_short() {
-        let id = "CAAAA";
-        let err = validate_contract_id(id).unwrap_err();
-        assert!(err.to_string().contains("must be 56 characters"));
+        assert!(validate_contract_id("CAAAA").is_err());
     }
 
     #[test]
     fn rejects_too_long() {
-        let id = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA";
-        let err = validate_contract_id(id).unwrap_err();
-        assert!(err.to_string().contains("must be 56 characters"));
+        let long = format!("{}AA", VALID_ZEROS);
+        assert!(validate_contract_id(&long).is_err());
     }
 
     #[test]
-    fn rejects_invalid_base32_chars() {
-        // '0', '1', '8', '9' and lowercase are not valid base32
-        let id = "C0000000000000000000000000000000000000000000000000000000";
-        let err = validate_contract_id(id).unwrap_err();
-        assert!(err.to_string().contains("invalid base32"));
+    fn rejects_bad_checksum() {
+        // Flip last char to break checksum
+        let mut bad = VALID_ZEROS.to_string();
+        bad.pop();
+        bad.push('A');
+        assert!(validate_contract_id(&bad).is_err());
+    }
+
+    #[test]
+    fn rejects_invalid_chars() {
+        assert!(validate_contract_id("C000000000000000000000000000000000000000000000000000000").is_err());
     }
 
     #[test]
     fn rejects_lowercase() {
-        let id = "Caaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa";
-        let err = validate_contract_id(id).unwrap_err();
-        assert!(err.to_string().contains("invalid base32"));
+        let lower = VALID_ZEROS.to_lowercase();
+        assert!(validate_contract_id(&lower).is_err());
+    }
+
+    #[test]
+    fn rejects_empty() {
+        assert!(validate_contract_id("").is_err());
     }
 }
