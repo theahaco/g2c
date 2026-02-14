@@ -1,6 +1,6 @@
 {
   "generators": {
-    "address": 2,
+    "address": 3,
     "nonce": 0,
     "mux_id": 0
   },
@@ -93,7 +93,7 @@
                     "symbol": "Fingerprint"
                   },
                   {
-                    "bytes": "e56843af551d31f3539e87579c437a22446fdb80ef961c5a9f2da4079e929fc9"
+                    "bytes": "9165163a4690a8aa9476e5fe21572e4e84b2e5c9eb225bf2c0d46fa1f2dfe8df"
                   }
                 ]
               },
@@ -140,7 +140,7 @@
           },
           "ext": "v0"
         },
-        "live_until": 4095
+        "live_until": 518400
       },
       {
         "entry": {
@@ -252,7 +252,7 @@
                         "address": "CBKMUZNFQIAL775XBB2W2GP5CNHBM5YGH6C3XB7AY6SUVO2IBU3VYK2V"
                       },
                       {
-                        "bytes": "046182cabf48ad55d4c9ccd3ac73758787ff24916091869f90ff5215e84f52a00f5d7ee5f11ab1cf06b96f66c960e88710ff6d27cd7452d7110f6218e55ee8b6e6"
+                        "bytes": "04a8ecd5d213c62492dabf6f84dfa9b87d547bb5e41e224ba2f7f8ea269f2c811465493fba8b3fd9aff47f93831a981bc5808a408a13e3307b4c65cb4523624a46"
                       }
                     ]
                   }

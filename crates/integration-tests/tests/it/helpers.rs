@@ -2,7 +2,7 @@ use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use p256::ecdsa::{signature::Signer as _, Signature, SigningKey};
 use sha2::{Digest, Sha256};
-use stellar_accounts::smart_account::ContextRule;
+use stellar_accounts::smart_account::{ContextRule, Signer};
 
 pub const SMART_ACCOUNT_WASM: &[u8] =
     include_bytes!("../../../../target/wasm32v1-none/contract/g2c_smart_account.wasm");
@@ -135,4 +135,37 @@ pub fn build_contract_assertion(
         signature,
         key_data,
     }
+}
+
+/// Deploy the WebAuthn verifier and smart account contracts, initialising the
+/// account with a single passkey signer. Returns the client, account address,
+/// verifier address, and signing key.
+pub fn deploy_smart_account(
+    env: &soroban_sdk::Env,
+) -> (
+    SmartAccountClient<'_>,
+    soroban_sdk::Address,
+    soroban_sdk::Address,
+    SigningKey,
+) {
+    // Deploy the stateless WebAuthn verifier
+    let verifier_addr = env.register(WEBAUTHN_VERIFIER_WASM, ());
+
+    // Generate a passkey (P-256 keypair)
+    let signing_key = SigningKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
+    let pubkey_sec1 = signing_key.verifying_key().to_sec1_bytes();
+
+    // Construct the External signer: (verifier_address, public_key_bytes)
+    let key_data = soroban_sdk::Bytes::from_slice(env, &pubkey_sec1);
+    let signer = Signer::External(verifier_addr.clone(), key_data);
+
+    let signers = soroban_sdk::vec![env, signer];
+    let policies: soroban_sdk::Map<soroban_sdk::Address, soroban_sdk::Val> =
+        soroban_sdk::Map::new(env);
+
+    // Deploy the smart account with the passkey signer
+    let account_addr = env.register(SMART_ACCOUNT_WASM, (&signers, &policies));
+
+    let client = SmartAccountClient::new(env, &account_addr);
+    (client, account_addr, verifier_addr, signing_key)
 }
