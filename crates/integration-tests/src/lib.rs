@@ -1,12 +1,7 @@
-use std::sync::Arc;
-
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
-use p256::ecdsa::{signature::Signer as _, Signature, SigningKey};
-use passkey_core::storage::InMemoryStore;
-use passkey_server::build_router;
-use sha2::{Digest, Sha256};
+use p256::ecdsa::{Signature, SigningKey};
 use stellar_accounts::smart_account::{ContextRule, Signer};
 
 pub const SMART_ACCOUNT_WASM: &[u8] =
@@ -20,87 +15,6 @@ pub const WEBAUTHN_VERIFIER_WASM: &[u8] =
 trait SmartAccountInterface {
     fn get_context_rule(env: soroban_sdk::Env, context_rule_id: u32) -> ContextRule;
     fn get_context_rules_count(env: soroban_sdk::Env) -> u32;
-}
-
-/// A valid Stellar strkey C-address for testing.
-pub const TEST_CONTRACT_ID: &str = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
-
-/// Start the passkey-server on an OS-assigned port and return the base URL.
-///
-/// # Panics
-/// Panics if the TCP listener cannot bind to a local port.
-pub async fn start_server() -> String {
-    let store = Arc::new(InMemoryStore::new());
-    let app = build_router(store);
-
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let port = listener.local_addr().unwrap().port();
-
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
-    });
-
-    format!("http://127.0.0.1:{port}")
-}
-
-/// Off-chain `WebAuthn` assertion fields (base64url-encoded strings)
-/// suitable for the passkey-server HTTP verify endpoint.
-pub struct ServerAssertion {
-    pub authenticator_data: String,
-    pub client_data_json: String,
-    pub signature: String,
-    pub public_key: String,
-}
-
-/// Build a synthetic `WebAuthn` assertion for the off-chain (HTTP server)
-/// verification flow. Uses the RP ID and origin derived from the contract ID.
-///
-/// # Panics
-/// Panics if JSON serialization or ECDSA signing fails.
-#[must_use]
-pub fn build_server_assertion(
-    signing_key: &SigningKey,
-    contract_id: &str,
-    challenge_b64: &str,
-) -> ServerAssertion {
-    let rp_id = passkey_core::rp::rp_id(contract_id);
-    let origin = passkey_core::rp::expected_origin(contract_id);
-
-    // authenticatorData: rpIdHash (32) || flags (1) || signCount (4)
-    let rp_hash: [u8; 32] = Sha256::digest(rp_id.as_bytes()).into();
-    let flags: u8 = 0x05; // UP + UV
-    let sign_count: u32 = 1;
-    let mut auth_data = Vec::with_capacity(37);
-    auth_data.extend_from_slice(&rp_hash);
-    auth_data.push(flags);
-    auth_data.extend_from_slice(&sign_count.to_be_bytes());
-
-    // clientDataJSON
-    let client_data_json_bytes = serde_json::to_vec(&serde_json::json!({
-        "type": "webauthn.get",
-        "challenge": challenge_b64,
-        "origin": origin,
-    }))
-    .unwrap();
-
-    // signed message = authData || SHA-256(clientDataJSON)
-    let client_data_hash: [u8; 32] = Sha256::digest(&client_data_json_bytes).into();
-    let mut message = Vec::with_capacity(auth_data.len() + 32);
-    message.extend_from_slice(&auth_data);
-    message.extend_from_slice(&client_data_hash);
-
-    // P-256 ECDSA sign (RFC 6979 deterministic)
-    let signature: Signature = signing_key.sign(&message);
-
-    // SEC1 uncompressed public key (65 bytes)
-    let pubkey_bytes = signing_key.verifying_key().to_sec1_bytes();
-
-    ServerAssertion {
-        authenticator_data: URL_SAFE_NO_PAD.encode(&auth_data),
-        client_data_json: URL_SAFE_NO_PAD.encode(&client_data_json_bytes),
-        signature: URL_SAFE_NO_PAD.encode(signature.to_der()),
-        public_key: URL_SAFE_NO_PAD.encode(&pubkey_bytes),
-    }
 }
 
 /// On-chain `WebAuthn` assertion components (soroban-sdk types) suitable for
