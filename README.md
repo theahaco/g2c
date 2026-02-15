@@ -1,5 +1,7 @@
 # g2c
 
+Demo: https://mysoroban.xyz/dapp
+
 Migrate Stellar G-addresses to Soroban Smart Accounts (C-addresses) with passkey authentication.
 
 g2c provides smart contracts, a web wallet, and an onboarding SDK that let users create passkey-secured C-addresses funded from any G-address or CEX withdrawal — in a single atomic transaction.
