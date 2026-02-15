@@ -47,8 +47,6 @@ contracts/
   smart-account/       # Passkey-authenticated smart account
   webauthn-verifier/   # On-chain P-256 signature verifier
 crates/
-  passkey-core/        # WebAuthn crypto library
-  passkey-server/      # Local dev server (Axum)
   integration-tests/   # Cross-crate integration tests
 frontend/              # Wallet web app
 ```

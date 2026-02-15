@@ -1,12 +1,10 @@
 {
   "generators": {
-    "address": 2,
+    "address": 3,
     "nonce": 0,
     "mux_id": 0
   },
-  "auth": [
-    []
-  ],
+  "auth": [],
   "ledger": {
     "protocol_version": 25,
     "sequence_number": 0,
@@ -93,7 +91,7 @@
                     "symbol": "Fingerprint"
                   },
                   {
-                    "bytes": "7bb9d0f6c49e2fe6b803f569b01f4b343760bcf57555b47e9308c65a5ec96477"
+                    "bytes": "9d70d4a25ad1dbd09a36df6edf95e300f4f58b1bf29736d107066b4f28d13384"
                   }
                 ]
               },
@@ -194,7 +192,7 @@
           },
           "ext": "v0"
         },
-        "live_until": 518400
+        "live_until": 4095
       },
       {
         "entry": {
@@ -221,7 +219,7 @@
           },
           "ext": "v0"
         },
-        "live_until": 518400
+        "live_until": 4095
       },
       {
         "entry": {
@@ -252,7 +250,7 @@
                         "address": "CBKMUZNFQIAL775XBB2W2GP5CNHBM5YGH6C3XB7AY6SUVO2IBU3VYK2V"
                       },
                       {
-                        "bytes": "048c209f2bc2874afac2cb59553744ac3c3b9447fdfa85eb455bc87b1d578b181dec21e6ecef36150b2809316b3dc4634b2583527431c1fa0632e6c2e588612928"
+                        "bytes": "048df43dbb393485393a0676d326451f37dc82f7d528225986c028e0610059d1a5b820b7a8251b480f7ab6f5318def3b58a3952d09bac9751671fecb2d32f83815"
                       }
                     ]
                   }
@@ -262,7 +260,7 @@
           },
           "ext": "v0"
         },
-        "live_until": 518400
+        "live_until": 4095
       },
       {
         "entry": {

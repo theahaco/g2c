@@ -13,21 +13,9 @@ doctest = false
 soroban-sdk = { workspace = true, features = ["testutils"] }
 stellar-accounts = { workspace = true }
 
-# Passkey server & core
-passkey-server = { path = "../passkey-server" }
-passkey-core = { path = "../passkey-core" }
-
 # Crypto
 p256 = { version = "0.13", features = ["ecdsa"] }
 sha2 = "0.10"
 
-# HTTP & server
-tokio = { version = "1", features = ["full"] }
-axum = "0.8"
-
-# Serialization
-serde_json = { workspace = true }
+# Encoding
 base64 = { workspace = true }
-
-[dev-dependencies]
-reqwest = { version = "0.12", features = ["json"] }
