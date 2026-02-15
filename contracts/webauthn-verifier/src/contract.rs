@@ -13,7 +13,7 @@ impl Verifier for WebAuthnVerifier {
     type KeyData = Bytes;
     type SigData = Bytes;
 
-    /// Verify a WebAuthn (passkey) signature.
+    /// Verify a `WebAuthn` (passkey) signature.
     ///
     /// # Arguments
     ///

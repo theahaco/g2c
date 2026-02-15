@@ -5,7 +5,7 @@ use std::sync::Mutex;
 use crate::challenge::Challenge;
 use crate::error::Error;
 
-/// Trait for storing and retrieving WebAuthn challenges.
+/// Trait for storing and retrieving `WebAuthn` challenges.
 ///
 /// Uses `?Send` bound for wasm compatibility (single-threaded executor).
 #[async_trait(?Send)]
@@ -26,6 +26,7 @@ pub struct InMemoryStore {
 }
 
 impl InMemoryStore {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             data: Mutex::new(HashMap::new()),
@@ -33,6 +34,9 @@ impl InMemoryStore {
     }
 
     /// Synchronous store — usable from Send contexts (e.g. Axum).
+    ///
+    /// # Errors
+    /// Returns an error if serialization or lock acquisition fails.
     pub fn store(&self, key: &str, challenge: &Challenge) -> Result<(), Error> {
         let json = serde_json::to_string(challenge).map_err(|e| Error::Storage(e.to_string()))?;
         self.data
@@ -43,6 +47,9 @@ impl InMemoryStore {
     }
 
     /// Synchronous retrieve.
+    ///
+    /// # Errors
+    /// Returns an error if deserialization or lock acquisition fails.
     pub fn retrieve(&self, key: &str) -> Result<Option<Challenge>, Error> {
         let guard = self
             .data
@@ -59,6 +66,9 @@ impl InMemoryStore {
     }
 
     /// Synchronous delete.
+    ///
+    /// # Errors
+    /// Returns an error if lock acquisition fails.
     pub fn delete(&self, key: &str) -> Result<(), Error> {
         self.data
             .lock()

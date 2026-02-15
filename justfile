@@ -34,7 +34,7 @@ dev:
 # Check formatting and clippy
 check:
     cargo fmt --all -- --check
-    cargo clippy --workspace -- -D warnings
+    cargo clippy  --all --tests -- -Dclippy::pedantic
 
 # Format all code
 fmt:

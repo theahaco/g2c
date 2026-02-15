@@ -35,10 +35,10 @@ fn json_response<T: Serialize>(body: &T, status: u16) -> worker::Result<Response
     response
         .headers_mut()
         .set("Content-Type", "application/json")?;
-    if status != 200 {
-        Ok(response.with_status(status))
-    } else {
+    if status == 200 {
         Ok(response)
+    } else {
+        Ok(response.with_status(status))
     }
 }
 
@@ -96,6 +96,13 @@ pub async fn create_challenge(_req: Request, ctx: RouteContext<()>) -> worker::R
 }
 
 pub async fn verify(mut req: Request, ctx: RouteContext<()>) -> worker::Result<Response> {
+    #[derive(serde::Deserialize)]
+    struct VerifyBody {
+        challenge_id: String,
+        #[serde(flatten)]
+        request: VerifyRequest,
+    }
+
     let contract_id = match ctx.param("contract_id") {
         Some(id) => id.to_string(),
         None => return error_response("missing contract_id", 400),
@@ -106,13 +113,6 @@ pub async fn verify(mut req: Request, ctx: RouteContext<()>) -> worker::Result<R
     }
 
     // Parse request body
-    #[derive(serde::Deserialize)]
-    struct VerifyBody {
-        challenge_id: String,
-        #[serde(flatten)]
-        request: VerifyRequest,
-    }
-
     let body: VerifyBody = match req.json().await {
         Ok(b) => b,
         Err(e) => return error_response(&format!("invalid request body: {e}"), 400),
@@ -122,13 +122,12 @@ pub async fn verify(mut req: Request, ctx: RouteContext<()>) -> worker::Result<R
     let key = format!("challenge:{}:{}", contract_id, body.challenge_id);
 
     // Retrieve and consume challenge (one-time use)
-    let challenge = match store
+    let Some(challenge) = store
         .retrieve_challenge(&key)
         .await
         .map_err(|e| worker::Error::RustError(e.to_string()))?
-    {
-        Some(c) => c,
-        None => return error_response("challenge not found or already used", 404),
+    else {
+        return error_response("challenge not found or already used", 404);
     };
 
     // Delete immediately (one-time use)

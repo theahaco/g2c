@@ -7,7 +7,7 @@ const MIN_AUTH_DATA_LEN: usize = 37;
 const FLAG_UP: u8 = 0x01; // User Present
 const FLAG_UV: u8 = 0x04; // User Verified
 
-/// Parsed authenticatorData from a WebAuthn assertion.
+/// Parsed authenticatorData from a `WebAuthn` assertion.
 #[derive(Debug)]
 pub struct AuthenticatorData {
     /// SHA-256 hash of the RP ID (32 bytes).
@@ -21,11 +21,14 @@ pub struct AuthenticatorData {
 impl AuthenticatorData {
     /// Parse authenticatorData from raw bytes.
     ///
-    /// Layout (per WebAuthn spec):
+    /// Layout (per `WebAuthn` spec):
     /// - bytes [0..32]:  rpIdHash (SHA-256 of RP ID)
     /// - byte  [32]:     flags
     /// - bytes [33..37]: signCount (big-endian u32)
     /// - bytes [37..]:   optional extensions (ignored for assertions)
+    ///
+    /// # Errors
+    /// Returns an error if the data is too short or malformed.
     pub fn parse(data: &[u8]) -> Result<Self, Error> {
         if data.len() < MIN_AUTH_DATA_LEN {
             return Err(Error::InvalidAuthenticatorData(format!(
@@ -50,11 +53,13 @@ impl AuthenticatorData {
     }
 
     /// Returns true if the User Present (UP) flag is set.
+    #[must_use]
     pub fn user_present(&self) -> bool {
         self.flags & FLAG_UP != 0
     }
 
     /// Returns true if the User Verified (UV) flag is set.
+    #[must_use]
     pub fn user_verified(&self) -> bool {
         self.flags & FLAG_UV != 0
     }
@@ -123,8 +128,8 @@ mod tests {
 
     #[test]
     fn sign_count_big_endian() {
-        let data = make_auth_data("test.example.com", 0x01, 0x01020304);
+        let data = make_auth_data("test.example.com", 0x01, 0x0102_0304);
         let parsed = AuthenticatorData::parse(&data).unwrap();
-        assert_eq!(parsed.sign_count, 0x01020304);
+        assert_eq!(parsed.sign_count, 0x0102_0304);
     }
 }

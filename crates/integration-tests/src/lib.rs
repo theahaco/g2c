@@ -2,6 +2,7 @@ use std::sync::Arc;
 
 use base64::engine::general_purpose::URL_SAFE_NO_PAD;
 use base64::Engine;
+use p256::ecdsa::signature::hazmat::PrehashSigner;
 use p256::ecdsa::{signature::Signer as _, Signature, SigningKey};
 use passkey_core::storage::InMemoryStore;
 use passkey_server::build_router;
@@ -25,6 +26,9 @@ trait SmartAccountInterface {
 pub const TEST_CONTRACT_ID: &str = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
 
 /// Start the passkey-server on an OS-assigned port and return the base URL.
+///
+/// # Panics
+/// Panics if the TCP listener cannot bind to a local port.
 pub async fn start_server() -> String {
     let store = Arc::new(InMemoryStore::new());
     let app = build_router(store);
@@ -39,7 +43,7 @@ pub async fn start_server() -> String {
     format!("http://127.0.0.1:{port}")
 }
 
-/// Off-chain WebAuthn assertion fields (base64url-encoded strings)
+/// Off-chain `WebAuthn` assertion fields (base64url-encoded strings)
 /// suitable for the passkey-server HTTP verify endpoint.
 pub struct ServerAssertion {
     pub authenticator_data: String,
@@ -48,8 +52,12 @@ pub struct ServerAssertion {
     pub public_key: String,
 }
 
-/// Build a synthetic WebAuthn assertion for the off-chain (HTTP server)
+/// Build a synthetic `WebAuthn` assertion for the off-chain (HTTP server)
 /// verification flow. Uses the RP ID and origin derived from the contract ID.
+///
+/// # Panics
+/// Panics if JSON serialization or ECDSA signing fails.
+#[must_use]
 pub fn build_server_assertion(
     signing_key: &SigningKey,
     contract_id: &str,
@@ -95,8 +103,8 @@ pub fn build_server_assertion(
     }
 }
 
-/// On-chain WebAuthn assertion components (soroban-sdk types) suitable for
-/// the WebAuthnVerifier contract.
+/// On-chain `WebAuthn` assertion components (soroban-sdk types) suitable for
+/// the `WebAuthnVerifier` contract.
 pub struct ContractAssertion {
     pub authenticator_data: soroban_sdk::Bytes,
     pub client_data: soroban_sdk::Bytes,
@@ -104,10 +112,14 @@ pub struct ContractAssertion {
     pub key_data: soroban_sdk::Bytes,
 }
 
-/// Build a synthetic WebAuthn assertion for on-chain verification.
+/// Build a synthetic `WebAuthn` assertion for on-chain verification.
 ///
 /// The `signature_payload` is the 32-byte hash that the Soroban auth framework
 /// would produce. The challenge in clientDataJSON is its base64url encoding.
+///
+/// # Panics
+/// Panics if prehash ECDSA signing fails.
+#[must_use]
 pub fn build_contract_assertion(
     signing_key: &SigningKey,
     env: &soroban_sdk::Env,
@@ -125,8 +137,7 @@ pub fn build_contract_assertion(
 
     // clientDataJSON
     let client_data_str = std::format!(
-        r#"{{"type":"webauthn.get","challenge":"{}","origin":"https://example.com","crossOrigin":false}}"#,
-        challenge_b64,
+        r#"{{"type":"webauthn.get","challenge":"{challenge_b64}","origin":"https://example.com","crossOrigin":false}}"#,
     );
     let client_data = soroban_sdk::Bytes::from_slice(env, client_data_str.as_bytes());
 
@@ -137,7 +148,6 @@ pub fn build_contract_assertion(
     let digest = env.crypto().sha256(&msg);
 
     // Prehash sign (we already have the final hash)
-    use p256::ecdsa::signature::hazmat::PrehashSigner;
     let sig: Signature = signing_key.sign_prehash(&digest.to_array()).unwrap();
     let sig_normalized = sig.normalize_s().unwrap_or(sig);
     let mut sig_bytes = [0u8; 64];
@@ -156,7 +166,7 @@ pub fn build_contract_assertion(
     }
 }
 
-/// Deploy the WebAuthn verifier and smart account contracts, initialising the
+/// Deploy the `WebAuthn` verifier and smart account contracts, initialising the
 /// account with a single passkey signer. Returns the client, account address,
 /// verifier address, and signing key.
 pub fn deploy_smart_account(

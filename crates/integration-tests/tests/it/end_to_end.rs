@@ -11,7 +11,7 @@ use stellar_accounts::smart_account::{do_check_auth, Signatures, Signer};
 use stellar_accounts::verifiers::webauthn::{self, WebAuthnSigData};
 
 /// The same P-256 keypair can verify both off-chain (HTTP server) and on-chain
-/// (WebAuthn verifier contract).
+/// (`WebAuthn` verifier contract).
 #[tokio::test]
 async fn same_keypair_verifies_offchain_and_onchain() {
     let signing_key = SigningKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
@@ -21,7 +21,7 @@ async fn same_keypair_verifies_offchain_and_onchain() {
     let http = reqwest::Client::new();
 
     let resp = http
-        .post(format!("{base}/auth/challenge/{}", TEST_CONTRACT_ID))
+        .post(format!("{base}/auth/challenge/{TEST_CONTRACT_ID}"))
         .send()
         .await
         .unwrap();
@@ -34,7 +34,7 @@ async fn same_keypair_verifies_offchain_and_onchain() {
     let assertion = build_server_assertion(&signing_key, TEST_CONTRACT_ID, challenge);
 
     let resp = http
-        .post(format!("{base}/auth/verify/{}", TEST_CONTRACT_ID))
+        .post(format!("{base}/auth/verify/{TEST_CONTRACT_ID}"))
         .json(&serde_json::json!({
             "challenge_id": challenge_id,
             "authenticator_data": assertion.authenticator_data,
@@ -80,7 +80,7 @@ async fn same_keypair_verifies_offchain_and_onchain() {
 }
 
 /// Full smart account `__check_auth` flow: deploy account with passkey signer,
-/// build a WebAuthn assertion, and verify via `do_check_auth`.
+/// build a `WebAuthn` assertion, and verify via `do_check_auth`.
 #[test]
 fn smart_account_check_auth_with_passkey() {
     let env = Env::default();
@@ -124,7 +124,7 @@ fn smart_account_check_auth_with_passkey() {
     });
 }
 
-/// `do_check_auth` rejects a WebAuthn assertion signed by the wrong key.
+/// `do_check_auth` rejects a `WebAuthn` assertion signed by the wrong key.
 #[test]
 fn smart_account_check_auth_rejects_wrong_key() {
     let env = Env::default();

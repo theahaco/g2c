@@ -6,7 +6,7 @@ use crate::rp;
 use crate::webauthn::authenticator::AuthenticatorData;
 use crate::webauthn::client_data::ClientData;
 
-/// Request payload for WebAuthn assertion verification.
+/// Request payload for `WebAuthn` assertion verification.
 #[derive(Debug, serde::Deserialize)]
 pub struct VerifyRequest {
     /// Raw authenticatorData bytes, base64url-encoded.
@@ -26,13 +26,16 @@ pub struct VerifyResponse {
     pub verified: bool,
 }
 
-/// Verify a WebAuthn assertion.
+/// Verify a `WebAuthn` assertion.
 ///
 /// Steps:
 /// 1. Parse authenticatorData and verify rpIdHash matches the contract's RP ID
 /// 2. Verify user presence flag
 /// 3. Parse and validate clientDataJSON (type, challenge, origin)
 /// 4. Verify P-256 ECDSA signature over `authenticatorData || SHA-256(clientDataJSON)`
+///
+/// # Errors
+/// Returns an error if any verification step fails (decoding, parsing, signature, or mismatch).
 pub fn verify_assertion(
     contract_id: &str,
     expected_challenge_b64: &str,
@@ -105,7 +108,7 @@ mod tests {
 
     const TEST_CONTRACT_ID: &str = "CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4";
 
-    /// Helper: build a synthetic WebAuthn assertion from a P-256 keypair.
+    /// Helper: build a synthetic `WebAuthn` assertion from a P-256 keypair.
     fn build_assertion(
         signing_key: &SigningKey,
         contract_id: &str,

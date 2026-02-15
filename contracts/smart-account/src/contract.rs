@@ -1,3 +1,7 @@
+// The `ref_option` lint is triggered by Soroban SDK macro-generated code
+// (contractclient/contractargs) for `Option<u32>` parameters, not by our code.
+#![allow(clippy::ref_option)]
+
 use soroban_sdk::{
     auth::{Context, CustomAccountInterface},
     contract, contractimpl,
@@ -18,13 +22,14 @@ pub struct G2CSmartAccount;
 impl G2CSmartAccount {
     /// Initialize the smart account with a default context rule.
     ///
-    /// Typically called with a single WebAuthn passkey signer during
+    /// Typically called with a single `WebAuthn` passkey signer during
     /// the G-to-C migration flow.
     ///
     /// # Arguments
     ///
-    /// * `signers` - Initial signers (e.g., passkey via WebAuthn verifier)
+    /// * `signers` - Initial signers (e.g., passkey via `WebAuthn` verifier)
     /// * `policies` - Optional policies (e.g., spending limits)
+    #[allow(clippy::needless_pass_by_value)]
     pub fn __constructor(e: &Env, signers: Vec<Signer>, policies: Map<Address, Val>) {
         add_context_rule(
             e,

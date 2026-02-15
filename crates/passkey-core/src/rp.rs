@@ -2,15 +2,17 @@ use sha2::{Digest, Sha256};
 
 const RP_SUFFIX: &str = "sorobancontracts.com";
 
-/// Generates the WebAuthn Relying Party ID for a given contract ID.
+/// Generates the `WebAuthn` Relying Party ID for a given contract ID.
 ///
 /// Format: `{contractId}.sorobancontracts.com`
+#[must_use]
 pub fn rp_id(contract_id: &str) -> String {
     format!("{contract_id}.{RP_SUFFIX}")
 }
 
 /// Computes the SHA-256 hash of the RP ID, used for comparing against
 /// the rpIdHash in authenticatorData.
+#[must_use]
 pub fn rp_id_hash(contract_id: &str) -> [u8; 32] {
     let id = rp_id(contract_id);
     let mut hasher = Sha256::new();
@@ -21,6 +23,7 @@ pub fn rp_id_hash(contract_id: &str) -> [u8; 32] {
 /// Returns the expected origin URL for a given contract ID.
 ///
 /// Format: `https://{contractId}.sorobancontracts.com`
+#[must_use]
 pub fn expected_origin(contract_id: &str) -> String {
     format!("https://{}", rp_id(contract_id))
 }

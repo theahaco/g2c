@@ -3,7 +3,7 @@ use serde::Deserialize;
 
 use crate::error::Error;
 
-/// Parsed and validated clientDataJSON from a WebAuthn assertion.
+/// Parsed and validated clientDataJSON from a `WebAuthn` assertion.
 #[derive(Debug, Deserialize)]
 pub struct ClientData {
     /// Must be "webauthn.get" for assertions.
@@ -20,11 +20,17 @@ pub struct ClientData {
 
 impl ClientData {
     /// Parse clientDataJSON from raw bytes.
+    ///
+    /// # Errors
+    /// Returns an error if the JSON is invalid or missing required fields.
     pub fn parse(data: &[u8]) -> Result<Self, Error> {
         serde_json::from_slice(data).map_err(|e| Error::InvalidClientData(e.to_string()))
     }
 
     /// Validate the clientDataJSON fields against expected values.
+    ///
+    /// # Errors
+    /// Returns an error if the type, challenge, or origin does not match.
     pub fn validate(
         &self,
         expected_challenge_b64: &str,
@@ -55,6 +61,9 @@ impl ClientData {
     }
 
     /// Decode the challenge from base64url to raw bytes.
+    ///
+    /// # Errors
+    /// Returns an error if the base64url decoding fails.
     pub fn challenge_bytes(&self) -> Result<Vec<u8>, Error> {
         URL_SAFE_NO_PAD
             .decode(&self.challenge)

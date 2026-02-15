@@ -20,7 +20,7 @@ fn deploy_with_passkey_signer() {
             let stored: [u8; 65] = key_data.to_buffer::<65>().as_slice().try_into().unwrap();
             assert_eq!(&stored[..], &expected_pubkey[..]);
         }
-        _ => panic!("expected External signer"),
+        Signer::Delegated(_) => panic!("expected External signer"),
     }
 }
 

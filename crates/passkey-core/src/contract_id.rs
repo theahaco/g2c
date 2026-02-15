@@ -6,6 +6,9 @@ use crate::error::Error;
 ///
 /// Performs full strkey validation: base32 decoding, version byte check,
 /// CRC16 checksum verification, and 32-byte payload length check.
+///
+/// # Errors
+/// Returns an error if the contract ID is not a valid Stellar strkey C-address.
 pub fn validate_contract_id(contract_id: &str) -> Result<(), Error> {
     Contract::from_string(contract_id)
         .map_err(|_| Error::InvalidContractId(format!("invalid strkey: {contract_id}")))?;
@@ -44,7 +47,7 @@ mod tests {
 
     #[test]
     fn rejects_too_long() {
-        let long = format!("{}AA", VALID_ZEROS);
+        let long = format!("{VALID_ZEROS}AA");
         assert!(validate_contract_id(&long).is_err());
     }
 

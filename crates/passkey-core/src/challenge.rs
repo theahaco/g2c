@@ -5,7 +5,7 @@ use std::time::{Duration, SystemTime, UNIX_EPOCH};
 /// Default challenge TTL: 5 minutes.
 pub const CHALLENGE_TTL: Duration = Duration::from_secs(300);
 
-/// A WebAuthn challenge with metadata for storage and validation.
+/// A `WebAuthn` challenge with metadata for storage and validation.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Challenge {
     /// The raw 32-byte challenge, base64url-encoded.
@@ -20,6 +20,10 @@ pub struct Challenge {
 
 impl Challenge {
     /// Generates a new random challenge for the given contract ID.
+    ///
+    /// # Panics
+    /// Panics if the system random number generator fails.
+    #[must_use]
     pub fn new(contract_id: &str) -> Self {
         let mut challenge_bytes = [0u8; 32];
         getrandom::getrandom(&mut challenge_bytes).expect("getrandom failed");
@@ -41,11 +45,16 @@ impl Challenge {
     }
 
     /// Returns the storage key for this challenge.
+    #[must_use]
     pub fn storage_key(&self) -> String {
         format!("challenge:{}:{}", self.contract_id, self.challenge_id)
     }
 
     /// Checks whether the challenge has expired.
+    ///
+    /// # Panics
+    /// Panics if the system clock is before the UNIX epoch.
+    #[must_use]
     pub fn is_expired(&self) -> bool {
         let now = SystemTime::now()
             .duration_since(UNIX_EPOCH)
@@ -55,6 +64,9 @@ impl Challenge {
     }
 
     /// Decodes the challenge bytes from the base64url string.
+    ///
+    /// # Errors
+    /// Returns an error if the base64url decoding fails.
     pub fn challenge_bytes(&self) -> Result<Vec<u8>, base64::DecodeError> {
         URL_SAFE_NO_PAD.decode(&self.challenge)
     }
