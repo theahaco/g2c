@@ -1,0 +1,7 @@
+name = "mysoroban-proxy"
+main = "index.js"
+compatibility_date = "2024-01-01"
+
+routes = [
+  { pattern = "*.mysoroban.xyz/*", zone_name = "mysoroban.xyz" }
+]
