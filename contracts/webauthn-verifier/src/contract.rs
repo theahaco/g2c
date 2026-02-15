@@ -1,6 +1,5 @@
-use soroban_sdk::{contract, contractimpl, xdr::FromXdr, Bytes, BytesN, Env};
+use soroban_sdk::{contract, contractimpl, Bytes, BytesN, Env};
 use stellar_accounts::verifiers::{
-    utils::extract_from_bytes,
     webauthn::{self, WebAuthnSigData},
     Verifier,
 };
@@ -10,8 +9,8 @@ pub struct WebAuthnVerifier;
 
 #[contractimpl]
 impl Verifier for WebAuthnVerifier {
-    type KeyData = Bytes;
-    type SigData = Bytes;
+    type KeyData = BytesN<65>;
+    type SigData = WebAuthnSigData;
 
     /// Verify a `WebAuthn` (passkey) signature.
     ///
@@ -30,12 +29,6 @@ impl Verifier for WebAuthnVerifier {
         key_data: Self::KeyData,
         sig_data: Self::SigData,
     ) -> bool {
-        let sig_struct =
-            WebAuthnSigData::from_xdr(e, &sig_data).expect("WebAuthnSigData with correct format");
-
-        let pub_key: BytesN<65> =
-            extract_from_bytes(e, &key_data, 0..65).expect("65-byte public key to be extracted");
-
-        webauthn::verify(e, &signature_payload, &pub_key, &sig_struct)
+        webauthn::verify(e, &signature_payload, &key_data, &sig_data)
     }
 }

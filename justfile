@@ -20,8 +20,7 @@ build-wasm:
 
 # Build and optimize Soroban contracts
 build-contracts:
-    stellar contract build --optimize --package g2c-smart-account --profile contract
-    stellar contract build --optimize --package g2c-webauthn-verifier --profile contract
+    stellar contract build --optimize --profile contract
 
 # Run the local Axum dev server on :8787
 serve:

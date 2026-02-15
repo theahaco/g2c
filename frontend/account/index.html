@@ -179,8 +179,8 @@ async function signHash(hashHex) {
   const signatureCompact = derToCompact(signatureDer);
 
   return {
-    authenticatorData: buf2base64url(authenticatorData),
-    clientDataJSON: buf2base64url(clientDataJSON),
+    authenticatorData: buf2hex(authenticatorData),
+    clientDataJSON: buf2hex(clientDataJSON),
     signature: buf2hex(signatureCompact),
     publicKey: cred.publicKey
   };

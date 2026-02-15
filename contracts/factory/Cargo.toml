@@ -1,0 +1,18 @@
+[package]
+name = "g2c-factory"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+crate-type = ["cdylib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+stellar-accounts = { workspace = true }
+soroban-sdk-tools = { git = "https://github.com/BlaineHeffron/soroban-sdk-tools", rev = "8ac57cfea5695a2d777f3dd87634959e0eb1f9f2" }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }
