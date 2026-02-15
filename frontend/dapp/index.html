@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Demo dApp</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; color: #e0e0e0; background: #1e1e2e; }
+    h1 { margin-bottom: 0.5rem; color: #fff; }
+    h2 { margin: 1.5rem 0 0.5rem; color: #ccc; font-size: 1.1rem; }
+    code { background: #16213e; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.85rem; word-break: break-all; }
+    button { background: #0f3460; color: #e0e0e0; border: 1px solid #1a1a5e; padding: 0.5rem 1.2rem; border-radius: 4px; cursor: pointer; font-size: 0.95rem; }
+    button:hover { background: #1a4a80; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.primary { background: #4a1a6b; border-color: #6a2a8b; }
+    button.primary:hover { background: #5a2a7b; }
+    input { background: #16213e; color: #e0e0e0; border: 1px solid #333; padding: 0.5rem; border-radius: 4px; width: 100%; font-family: monospace; font-size: 0.85rem; }
+    pre { background: #16213e; padding: 0.75rem; border-radius: 4px; overflow-x: auto; font-size: 0.8rem; margin-top: 0.5rem; white-space: pre-wrap; word-break: break-all; color: #a0d0a0; }
+    .field { margin: 0.5rem 0; }
+    .field label { display: block; font-size: 0.85rem; color: #999; margin-bottom: 0.25rem; }
+    .info { color: #999; font-size: 0.85rem; margin: 0.5rem 0; }
+    section { border-top: 1px solid #333; padding-top: 1rem; }
+    .tx-preview { background: #1a2040; border: 1px solid #2a3060; border-radius: 6px; padding: 1rem; margin: 1rem 0; }
+    .tx-preview .label { color: #808090; font-size: 0.8rem; }
+    .tx-preview .value { color: #e0e0e0; font-size: 0.95rem; margin-bottom: 0.5rem; }
+    .success { background: #1a2a1a; border: 1px solid #2a5a2a; border-radius: 6px; padding: 1rem; margin: 1rem 0; }
+    .success h2 { color: #60c060; margin-top: 0; }
+    .error-result { background: #2a1a1a; border: 1px solid #5a2a2a; border-radius: 6px; padding: 1rem; margin: 1rem 0; }
+    .error-result h2 { color: #e06060; margin-top: 0; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+<h1>Demo dApp</h1>
+<p class="info">A simulated dApp that requests passkey signatures from Soroban smart accounts.</p>
+
+<!-- Step 1: Account -->
+<section>
+  <h2>1. Account</h2>
+  <div class="field">
+    <label for="contract-input">Smart Account Contract ID</label>
+    <input id="contract-input" value="CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4">
+  </div>
+</section>
+
+<!-- Step 2: Transaction -->
+<section>
+  <h2>2. Transaction</h2>
+  <div class="tx-preview">
+    <div class="label">Operation</div>
+    <div class="value">Send 100 XLM to Bob</div>
+    <div class="label">Source Account</div>
+    <div class="value" id="tx-source">CAAA...BSC4</div>
+    <div class="label">Transaction Hash</div>
+    <div class="value"><code id="tx-hash">click "Generate Hash" below</code></div>
+  </div>
+  <div class="field">
+    <button id="generate-btn">Generate Hash</button>
+  </div>
+</section>
+
+<!-- Step 3: Sign -->
+<section>
+  <h2>3. Request Signature</h2>
+  <p class="info">Redirects to the account's passkey site for approval.</p>
+  <div class="field">
+    <button id="request-btn" class="primary" disabled>Request Signature</button>
+  </div>
+</section>
+
+<!-- Result (shown after redirect back) -->
+<div id="result-section" class="hidden"></div>
+
+<script>
+const $contractInput = document.getElementById('contract-input');
+const $txSource = document.getElementById('tx-source');
+const $txHash = document.getElementById('tx-hash');
+const $generateBtn = document.getElementById('generate-btn');
+const $requestBtn = document.getElementById('request-btn');
+const $resultSection = document.getElementById('result-section');
+
+let currentHash = null;
+
+// Update source display when contract changes
+$contractInput.addEventListener('input', () => {
+  const id = $contractInput.value.trim();
+  $txSource.textContent = id.length > 12
+    ? `${id.slice(0, 4)}...${id.slice(-4)}`
+    : id;
+});
+$txSource.textContent = 'CAAA...BSC4';
+
+// Generate hash
+$generateBtn.addEventListener('click', () => {
+  const bytes = crypto.getRandomValues(new Uint8Array(32));
+  currentHash = [...bytes].map(b => b.toString(16).padStart(2, '0')).join('');
+  $txHash.textContent = currentHash;
+  $requestBtn.disabled = false;
+});
+
+// Request signature — redirect to account site
+$requestBtn.addEventListener('click', () => {
+  const contractId = $contractInput.value.trim();
+  if (!contractId) { alert('Enter a contract ID'); return; }
+  if (!currentHash) { alert('Generate a hash first'); return; }
+
+  const callbackUrl = `${window.location.origin}${window.location.pathname}?result=1`;
+  const accountUrl = `http://${contractId.toLowerCase()}.localhost:3000/account/?sign=${currentHash}&callback=${encodeURIComponent(callbackUrl)}`;
+  window.location.href = accountUrl;
+});
+
+// Check for returned signature
+function checkForResult() {
+  const params = new URLSearchParams(window.location.search);
+
+  if (params.get('error')) {
+    $resultSection.classList.remove('hidden');
+    $resultSection.innerHTML = `
+      <div class="error-result">
+        <h2>Request Denied</h2>
+        <p>The user denied the signature request.</p>
+      </div>`;
+    return;
+  }
+
+  const authenticatorData = params.get('authenticatorData');
+  const clientDataJSON = params.get('clientDataJSON');
+  const signature = params.get('signature');
+  const publicKey = params.get('publicKey');
+
+  if (authenticatorData && clientDataJSON && signature && publicKey) {
+    $resultSection.classList.remove('hidden');
+    $resultSection.innerHTML = `
+      <div class="success">
+        <h2>Signature Received</h2>
+        <p style="color: #a0d0a0; margin-bottom: 0.75rem;">Transaction would be submitted to the network.</p>
+        <pre>${JSON.stringify({
+          authenticatorData,
+          clientDataJSON,
+          signature,
+          publicKey
+        }, null, 2)}</pre>
+      </div>`;
+  }
+}
+
+checkForResult();
+</script>
+
+</body>
+</html>

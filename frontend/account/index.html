@@ -1,0 +1,393 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Soroban Passkey Account</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: system-ui, sans-serif; max-width: 640px; margin: 2rem auto; padding: 0 1rem; color: #e0e0e0; background: #1a1a2e; }
+    h1 { margin-bottom: 0.5rem; color: #fff; }
+    h2 { margin: 1.5rem 0 0.5rem; color: #ccc; font-size: 1.1rem; }
+    code { background: #16213e; padding: 0.15rem 0.4rem; border-radius: 3px; font-size: 0.85rem; word-break: break-all; }
+    button { background: #0f3460; color: #e0e0e0; border: 1px solid #1a1a5e; padding: 0.5rem 1.2rem; border-radius: 4px; cursor: pointer; font-size: 0.95rem; }
+    button:hover { background: #1a4a80; }
+    button:disabled { opacity: 0.4; cursor: not-allowed; }
+    button.primary { background: #1a6b3a; border-color: #1a8b4a; font-size: 1.1rem; padding: 0.7rem 2rem; }
+    button.primary:hover { background: #1a8b4a; }
+    input { background: #16213e; color: #e0e0e0; border: 1px solid #333; padding: 0.5rem; border-radius: 4px; width: 100%; font-family: monospace; font-size: 0.85rem; }
+    pre { background: #16213e; padding: 0.75rem; border-radius: 4px; overflow-x: auto; font-size: 0.8rem; margin-top: 0.5rem; white-space: pre-wrap; word-break: break-all; color: #a0d0a0; }
+    .field { margin: 0.5rem 0; }
+    .field label { display: block; font-size: 0.85rem; color: #999; margin-bottom: 0.25rem; }
+    .error { color: #ff6b6b; }
+    .info { color: #999; font-size: 0.85rem; margin: 0.5rem 0; }
+    section { border-top: 1px solid #333; padding-top: 1rem; }
+    #status-bar { background: #0a2040; border: 1px solid #1a3060; border-radius: 4px; padding: 0.5rem 0.75rem; margin: 1rem 0; font-size: 0.85rem; }
+    .signing-request { background: #1a2a1a; border: 1px solid #2a4a2a; border-radius: 6px; padding: 1rem; margin: 1rem 0; }
+    .signing-request h2 { margin-top: 0; color: #90d090; }
+    .signing-request .origin { color: #80b0e0; font-size: 0.9rem; }
+    .signing-request .hash { font-family: monospace; font-size: 0.8rem; color: #c0c0c0; margin: 0.75rem 0; word-break: break-all; }
+    .hidden { display: none; }
+  </style>
+</head>
+<body>
+
+<h1>Soroban Passkey</h1>
+<div id="status-bar">
+  <div>Contract: <code id="contract-id"></code></div>
+  <div>RP ID: <code id="rp-id"></code></div>
+  <div>Stored key: <code id="stored-key">none</code></div>
+</div>
+
+<div id="error-box" class="error" style="display:none"></div>
+
+<!-- Signing mode UI -->
+<div id="signing-mode" class="hidden">
+  <div class="signing-request">
+    <h2>Signature Request</h2>
+    <div>From: <span class="origin" id="sign-origin"></span></div>
+    <div class="hash">Hash: <code id="sign-hash"></code></div>
+  </div>
+
+  <div id="sign-needs-register">
+    <p class="info">No passkey registered yet. Register one first, then you can approve the request.</p>
+    <div class="field">
+      <button id="sign-register-btn">Register Passkey</button>
+    </div>
+  </div>
+
+  <div id="sign-ready" class="hidden">
+    <div class="field">
+      <button id="approve-btn" class="primary">Approve & Sign</button>
+      <button id="deny-btn" style="margin-left:0.5rem">Deny</button>
+    </div>
+  </div>
+
+  <pre id="sign-mode-result" style="display:none"></pre>
+</div>
+
+<!-- Home mode UI -->
+<div id="home-mode" class="hidden">
+  <section id="register-section">
+    <h2>1. Register Passkey</h2>
+    <p class="info">Creates a new passkey bound to this contract's subdomain.</p>
+    <div class="field">
+      <button id="register-btn">Register Passkey</button>
+    </div>
+    <pre id="register-result" style="display:none"></pre>
+  </section>
+
+  <section id="sign-section">
+    <h2>2. Sign a Hash</h2>
+    <p class="info">Authenticate with your passkey to sign a 32-byte hash (e.g. a transaction hash).</p>
+    <div class="field">
+      <label for="hash-input">Hash to sign (64 hex chars)</label>
+      <input id="hash-input" placeholder="e.g. a1b2c3d...64 hex characters" maxlength="64">
+    </div>
+    <div class="field" style="margin-top:0.5rem">
+      <button id="sign-btn" disabled>Sign</button>
+      <button id="random-hash-btn" style="margin-left:0.5rem; font-size:0.8rem">Random hash</button>
+    </div>
+    <pre id="sign-result" style="display:none"></pre>
+  </section>
+</div>
+
+<script src="../shared/webauthn.js"></script>
+<script>
+// --- State ---
+
+const hostname = window.location.hostname;
+const parts = hostname.split('.');
+const contractId = parts.length > 1 ? parts[0].toUpperCase() : null;
+const rpId = hostname;
+const storagePrefix = `passkey:${contractId}:`;
+
+const params = new URLSearchParams(window.location.search);
+const signHashParam = params.get('sign');
+const callbackUrl = params.get('callback');
+const isSigningMode = signHashParam && callbackUrl;
+
+function saveCredential(credentialId, publicKey) {
+  localStorage.setItem(storagePrefix + 'credentialId', buf2base64url(credentialId));
+  localStorage.setItem(storagePrefix + 'publicKey', buf2hex(publicKey));
+}
+
+function loadCredential() {
+  const credId = localStorage.getItem(storagePrefix + 'credentialId');
+  const pubKey = localStorage.getItem(storagePrefix + 'publicKey');
+  if (credId && pubKey) return { credentialId: base64url2buf(credId), publicKey: pubKey };
+  return null;
+}
+
+// --- Shared: register passkey ---
+
+async function registerPasskey() {
+  if (!contractId) throw new Error('Navigate to <contractId>.localhost:<port> to use');
+
+  const userId = new Uint8Array(16);
+  crypto.getRandomValues(userId);
+
+  const credential = await navigator.credentials.create({
+    publicKey: {
+      challenge: crypto.getRandomValues(new Uint8Array(32)),
+      rp: { name: `Soroban ${contractId.slice(0, 8)}...`, id: rpId },
+      user: {
+        id: userId,
+        name: contractId,
+        displayName: `Account ${contractId.slice(0, 8)}...${contractId.slice(-4)}`
+      },
+      pubKeyCredParams: [{ alg: -7, type: 'public-key' }],
+      authenticatorSelection: {
+        residentKey: 'required',
+        userVerification: 'required'
+      },
+      attestation: 'none',
+      timeout: 60000
+    }
+  });
+
+  const publicKey = extractPublicKey(credential.response);
+  const credentialId = new Uint8Array(credential.rawId);
+  saveCredential(credentialId, publicKey);
+  return { credentialId, publicKey };
+}
+
+// --- Shared: sign hash ---
+
+async function signHash(hashHex) {
+  const cred = loadCredential();
+  if (!cred) throw new Error('No passkey registered');
+
+  const challenge = hex2buf(hashHex);
+
+  const assertion = await navigator.credentials.get({
+    publicKey: {
+      challenge: challenge,
+      rpId: rpId,
+      allowCredentials: [{
+        id: cred.credentialId,
+        type: 'public-key'
+      }],
+      userVerification: 'required',
+      timeout: 60000
+    }
+  });
+
+  const authenticatorData = new Uint8Array(assertion.response.authenticatorData);
+  const clientDataJSON = new Uint8Array(assertion.response.clientDataJSON);
+  const signatureDer = new Uint8Array(assertion.response.signature);
+  const signatureCompact = derToCompact(signatureDer);
+
+  return {
+    authenticatorData: buf2base64url(authenticatorData),
+    clientDataJSON: buf2base64url(clientDataJSON),
+    signature: buf2hex(signatureCompact),
+    publicKey: cred.publicKey
+  };
+}
+
+// --- UI helpers ---
+
+function showError(msg) {
+  const $errorBox = document.getElementById('error-box');
+  $errorBox.textContent = msg;
+  $errorBox.style.display = 'block';
+}
+
+function clearError() {
+  document.getElementById('error-box').style.display = 'none';
+}
+
+function updateStatusBar() {
+  document.getElementById('contract-id').textContent = contractId || '(visit via <contractId>.localhost:PORT)';
+  document.getElementById('rp-id').textContent = rpId;
+
+  const cred = loadCredential();
+  document.getElementById('stored-key').textContent = cred ? cred.publicKey : 'none';
+  return cred;
+}
+
+// =====================
+// SIGNING MODE
+// =====================
+
+function initSigningMode() {
+  document.getElementById('signing-mode').classList.remove('hidden');
+
+  // Show request details
+  let originDisplay;
+  try {
+    originDisplay = new URL(callbackUrl).origin;
+  } catch {
+    originDisplay = callbackUrl;
+  }
+  document.getElementById('sign-origin').textContent = originDisplay;
+  document.getElementById('sign-hash').textContent = signHashParam;
+
+  const cred = loadCredential();
+  if (cred) {
+    document.getElementById('sign-ready').classList.remove('hidden');
+    document.getElementById('sign-needs-register').classList.add('hidden');
+  } else {
+    document.getElementById('sign-needs-register').classList.remove('hidden');
+    document.getElementById('sign-ready').classList.add('hidden');
+  }
+
+  // Register button in signing mode
+  document.getElementById('sign-register-btn').addEventListener('click', async () => {
+    clearError();
+    const btn = document.getElementById('sign-register-btn');
+    try {
+      btn.disabled = true;
+      btn.textContent = 'Waiting for authenticator...';
+      await registerPasskey();
+      updateStatusBar();
+      // Now show the approve button
+      document.getElementById('sign-needs-register').classList.add('hidden');
+      document.getElementById('sign-ready').classList.remove('hidden');
+    } catch (err) {
+      showError(`Registration failed: ${err.message}`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = 'Register Passkey';
+    }
+  });
+
+  // Approve button
+  document.getElementById('approve-btn').addEventListener('click', async () => {
+    clearError();
+    if (!/^[0-9a-fA-F]{64}$/.test(signHashParam)) {
+      showError('Invalid hash in sign parameter (need 64 hex chars)');
+      return;
+    }
+
+    const btn = document.getElementById('approve-btn');
+    try {
+      btn.disabled = true;
+      btn.textContent = 'Waiting for authenticator...';
+
+      const result = await signHash(signHashParam);
+
+      // Show result briefly
+      const $result = document.getElementById('sign-mode-result');
+      $result.style.display = 'block';
+      $result.textContent = 'Signed! Redirecting...';
+
+      // Build callback with signature data
+      const cbUrl = new URL(callbackUrl);
+      cbUrl.searchParams.set('authenticatorData', result.authenticatorData);
+      cbUrl.searchParams.set('clientDataJSON', result.clientDataJSON);
+      cbUrl.searchParams.set('signature', result.signature);
+      cbUrl.searchParams.set('publicKey', result.publicKey);
+
+      setTimeout(() => { window.location.href = cbUrl.toString(); }, 500);
+    } catch (err) {
+      showError(`Signing failed: ${err.message}`);
+      btn.disabled = false;
+      btn.textContent = 'Approve & Sign';
+    }
+  });
+
+  // Deny button
+  document.getElementById('deny-btn').addEventListener('click', () => {
+    try {
+      const cbUrl = new URL(callbackUrl);
+      cbUrl.searchParams.set('error', 'denied');
+      window.location.href = cbUrl.toString();
+    } catch {
+      window.history.back();
+    }
+  });
+}
+
+// =====================
+// HOME MODE
+// =====================
+
+function initHomeMode() {
+  document.getElementById('home-mode').classList.remove('hidden');
+
+  const $registerBtn = document.getElementById('register-btn');
+  const $registerResult = document.getElementById('register-result');
+  const $signBtn = document.getElementById('sign-btn');
+  const $signResult = document.getElementById('sign-result');
+  const $hashInput = document.getElementById('hash-input');
+  const $randomHashBtn = document.getElementById('random-hash-btn');
+
+  const cred = loadCredential();
+  if (cred) {
+    $signBtn.disabled = false;
+    $registerBtn.textContent = 'Re-register Passkey';
+  }
+
+  // Register
+  $registerBtn.addEventListener('click', async () => {
+    clearError();
+    try {
+      $registerBtn.disabled = true;
+      $registerBtn.textContent = 'Waiting for authenticator...';
+
+      const { credentialId, publicKey } = await registerPasskey();
+
+      $registerResult.style.display = 'block';
+      $registerResult.textContent = JSON.stringify({
+        credentialId: buf2base64url(credentialId),
+        publicKey: buf2hex(publicKey),
+        rpId: rpId
+      }, null, 2);
+
+      updateStatusBar();
+      $signBtn.disabled = false;
+      $registerBtn.textContent = 'Re-register Passkey';
+    } catch (err) {
+      showError(`Registration failed: ${err.message}`);
+    } finally {
+      $registerBtn.disabled = false;
+      if (!loadCredential()) $registerBtn.textContent = 'Register Passkey';
+    }
+  });
+
+  // Sign
+  $signBtn.addEventListener('click', async () => {
+    clearError();
+    const hashHex = $hashInput.value.trim();
+    if (!/^[0-9a-fA-F]{64}$/.test(hashHex)) {
+      showError('Enter a valid 32-byte hash (64 hex characters)');
+      return;
+    }
+
+    try {
+      $signBtn.disabled = true;
+      $signBtn.textContent = 'Waiting for authenticator...';
+
+      const result = await signHash(hashHex);
+
+      $signResult.style.display = 'block';
+      $signResult.textContent = JSON.stringify(result, null, 2);
+    } catch (err) {
+      showError(`Signing failed: ${err.message}`);
+    } finally {
+      $signBtn.disabled = false;
+      $signBtn.textContent = 'Sign';
+    }
+  });
+
+  // Random hash
+  $randomHashBtn.addEventListener('click', () => {
+    const bytes = crypto.getRandomValues(new Uint8Array(32));
+    $hashInput.value = buf2hex(bytes);
+  });
+}
+
+// --- Init ---
+
+updateStatusBar();
+if (isSigningMode) {
+  initSigningMode();
+} else {
+  initHomeMode();
+}
+</script>
+
+</body>
+</html>
