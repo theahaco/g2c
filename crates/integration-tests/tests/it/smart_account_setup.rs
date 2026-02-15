@@ -1,12 +1,11 @@
+use g2c_integration_tests::deploy_smart_account;
 use soroban_sdk::Env;
 use stellar_accounts::smart_account::{ContextRuleType, Signer};
-
-use crate::helpers;
 
 #[test]
 fn deploy_with_passkey_signer() {
     let env = Env::default();
-    let (client, _account_addr, _verifier_addr, signing_key) = helpers::deploy_smart_account(&env);
+    let (client, _account_addr, _verifier_addr, signing_key) = deploy_smart_account(&env);
 
     // The constructor creates a default context rule (id = 0)
     let rule = client.get_context_rule(&0u32);
@@ -28,7 +27,7 @@ fn deploy_with_passkey_signer() {
 #[test]
 fn default_context_rule_is_default_type() {
     let env = Env::default();
-    let (client, _account_addr, _verifier_addr, _signing_key) = helpers::deploy_smart_account(&env);
+    let (client, _account_addr, _verifier_addr, _signing_key) = deploy_smart_account(&env);
 
     let rule = client.get_context_rule(&0u32);
 
@@ -39,7 +38,7 @@ fn default_context_rule_is_default_type() {
 #[test]
 fn context_rules_count_is_one() {
     let env = Env::default();
-    let (client, _account_addr, _verifier_addr, _signing_key) = helpers::deploy_smart_account(&env);
+    let (client, _account_addr, _verifier_addr, _signing_key) = deploy_smart_account(&env);
 
     assert_eq!(client.get_context_rules_count(), 1);
 }

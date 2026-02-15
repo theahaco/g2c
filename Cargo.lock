@@ -869,7 +869,6 @@ dependencies = [
  "passkey-core",
  "passkey-server",
  "reqwest",
- "serde",
  "serde_json",
  "sha2",
  "soroban-sdk",

@@ -1,26 +1,6 @@
-use std::sync::Arc;
-
 use base64::Engine;
+use g2c_integration_tests::{build_server_assertion, start_server, TEST_CONTRACT_ID};
 use p256::ecdsa::SigningKey;
-use passkey_core::storage::InMemoryStore;
-use passkey_server::build_router;
-
-use crate::helpers::{build_server_assertion, TEST_CONTRACT_ID};
-
-/// Start the passkey-server on an OS-assigned port and return the base URL.
-async fn start_server() -> String {
-    let store = Arc::new(InMemoryStore::new());
-    let app = build_router(store);
-
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let port = listener.local_addr().unwrap().port();
-
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
-    });
-
-    format!("http://127.0.0.1:{port}")
-}
 
 // ------------------------------------------------------------------
 // Happy path

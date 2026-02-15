@@ -1,15 +1,14 @@
+use g2c_integration_tests::{build_contract_assertion, WEBAUTHN_VERIFIER_WASM};
 use p256::ecdsa::SigningKey;
 use soroban_sdk::Env;
 use stellar_accounts::verifiers::webauthn::{self, WebAuthnSigData};
-
-use crate::helpers;
 
 #[test]
 fn verify_webauthn_assertion_on_chain() {
     let env = Env::default();
 
     // Register the verifier contract
-    let verifier_addr = env.register(helpers::WEBAUTHN_VERIFIER_WASM, ());
+    let verifier_addr = env.register(WEBAUTHN_VERIFIER_WASM, ());
 
     // Generate a passkey (P-256 keypair)
     let signing_key = SigningKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
@@ -22,7 +21,7 @@ fn verify_webauthn_assertion_on_chain() {
         0x92, 0x2e,
     ];
 
-    let assertion = helpers::build_contract_assertion(&signing_key, &env, &payload_bytes);
+    let assertion = build_contract_assertion(&signing_key, &env, &payload_bytes);
 
     let sig_data = WebAuthnSigData {
         signature: assertion.signature,
@@ -52,13 +51,13 @@ fn verify_webauthn_assertion_on_chain() {
 fn reject_wrong_challenge_on_chain() {
     let env = Env::default();
 
-    let verifier_addr = env.register(helpers::WEBAUTHN_VERIFIER_WASM, ());
+    let verifier_addr = env.register(WEBAUTHN_VERIFIER_WASM, ());
 
     let signing_key = SigningKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
 
     // Build assertion for one payload but verify with a different one
     let payload_bytes: [u8; 32] = [1u8; 32];
-    let assertion = helpers::build_contract_assertion(&signing_key, &env, &payload_bytes);
+    let assertion = build_contract_assertion(&signing_key, &env, &payload_bytes);
 
     let sig_data = WebAuthnSigData {
         signature: assertion.signature,
@@ -90,13 +89,13 @@ fn reject_wrong_challenge_on_chain() {
 fn reject_wrong_key_on_chain() {
     let env = Env::default();
 
-    let verifier_addr = env.register(helpers::WEBAUTHN_VERIFIER_WASM, ());
+    let verifier_addr = env.register(WEBAUTHN_VERIFIER_WASM, ());
 
     let signing_key = SigningKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
     let wrong_key = SigningKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
 
     let payload_bytes: [u8; 32] = [3u8; 32];
-    let assertion = helpers::build_contract_assertion(&signing_key, &env, &payload_bytes);
+    let assertion = build_contract_assertion(&signing_key, &env, &payload_bytes);
 
     let sig_data = WebAuthnSigData {
         signature: assertion.signature,

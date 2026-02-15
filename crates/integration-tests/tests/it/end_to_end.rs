@@ -1,31 +1,14 @@
-use std::sync::Arc;
-
+use g2c_integration_tests::{
+    build_contract_assertion, build_server_assertion, deploy_smart_account, start_server,
+    TEST_CONTRACT_ID, WEBAUTHN_VERIFIER_WASM,
+};
 use p256::ecdsa::SigningKey;
-use passkey_core::storage::InMemoryStore;
-use passkey_server::build_router;
 use soroban_sdk::auth::{Context, ContractContext};
 use soroban_sdk::testutils::Address as _;
 use soroban_sdk::xdr::ToXdr;
 use soroban_sdk::{symbol_short, vec, Bytes, Env, Map};
 use stellar_accounts::smart_account::{do_check_auth, Signatures, Signer};
 use stellar_accounts::verifiers::webauthn::{self, WebAuthnSigData};
-
-use crate::helpers;
-
-/// Start the passkey-server on an OS-assigned port and return the base URL.
-async fn start_server() -> String {
-    let store = Arc::new(InMemoryStore::new());
-    let app = build_router(store);
-
-    let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
-    let port = listener.local_addr().unwrap().port();
-
-    tokio::spawn(async move {
-        axum::serve(listener, app).await.unwrap();
-    });
-
-    format!("http://127.0.0.1:{port}")
-}
 
 /// The same P-256 keypair can verify both off-chain (HTTP server) and on-chain
 /// (WebAuthn verifier contract).
@@ -38,10 +21,7 @@ async fn same_keypair_verifies_offchain_and_onchain() {
     let http = reqwest::Client::new();
 
     let resp = http
-        .post(format!(
-            "{base}/auth/challenge/{}",
-            helpers::TEST_CONTRACT_ID
-        ))
+        .post(format!("{base}/auth/challenge/{}", TEST_CONTRACT_ID))
         .send()
         .await
         .unwrap();
@@ -51,11 +31,10 @@ async fn same_keypair_verifies_offchain_and_onchain() {
     let challenge = body["challenge"].as_str().unwrap();
     let challenge_id = body["challenge_id"].as_str().unwrap();
 
-    let assertion =
-        helpers::build_server_assertion(&signing_key, helpers::TEST_CONTRACT_ID, challenge);
+    let assertion = build_server_assertion(&signing_key, TEST_CONTRACT_ID, challenge);
 
     let resp = http
-        .post(format!("{base}/auth/verify/{}", helpers::TEST_CONTRACT_ID))
+        .post(format!("{base}/auth/verify/{}", TEST_CONTRACT_ID))
         .json(&serde_json::json!({
             "challenge_id": challenge_id,
             "authenticator_data": assertion.authenticator_data,
@@ -73,10 +52,10 @@ async fn same_keypair_verifies_offchain_and_onchain() {
 
     // --- On-chain: contract verification with the SAME keypair ---
     let env = Env::default();
-    let verifier_addr = env.register(helpers::WEBAUTHN_VERIFIER_WASM, ());
+    let verifier_addr = env.register(WEBAUTHN_VERIFIER_WASM, ());
 
     let payload: [u8; 32] = [0xAB; 32];
-    let ca = helpers::build_contract_assertion(&signing_key, &env, &payload);
+    let ca = build_contract_assertion(&signing_key, &env, &payload);
 
     let sig_data = WebAuthnSigData {
         signature: ca.signature,
@@ -105,7 +84,7 @@ async fn same_keypair_verifies_offchain_and_onchain() {
 #[test]
 fn smart_account_check_auth_with_passkey() {
     let env = Env::default();
-    let (_client, account_addr, verifier_addr, signing_key) = helpers::deploy_smart_account(&env);
+    let (_client, account_addr, verifier_addr, signing_key) = deploy_smart_account(&env);
 
     // Simulate a signature payload: hash arbitrary input to get a Hash<32>
     // (Hash<32> can only be constructed via crypto functions).
@@ -113,7 +92,7 @@ fn smart_account_check_auth_with_passkey() {
 
     // Build the assertion using the hash bytes as the challenge so the
     // verifier's base64url(signature_payload) == challenge check passes.
-    let assertion = helpers::build_contract_assertion(&signing_key, &env, &hash.to_array());
+    let assertion = build_contract_assertion(&signing_key, &env, &hash.to_array());
 
     // XDR-encode WebAuthnSigData for the Signatures map
     let sig_data = WebAuthnSigData {
@@ -149,13 +128,13 @@ fn smart_account_check_auth_with_passkey() {
 #[test]
 fn smart_account_check_auth_rejects_wrong_key() {
     let env = Env::default();
-    let (_client, account_addr, verifier_addr, signing_key) = helpers::deploy_smart_account(&env);
+    let (_client, account_addr, verifier_addr, signing_key) = deploy_smart_account(&env);
 
     // Sign with a DIFFERENT key than the one registered
     let wrong_key = SigningKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
 
     let hash = env.crypto().sha256(&Bytes::from_array(&env, &[0xEF; 32]));
-    let assertion = helpers::build_contract_assertion(&wrong_key, &env, &hash.to_array());
+    let assertion = build_contract_assertion(&wrong_key, &env, &hash.to_array());
 
     let sig_data = WebAuthnSigData {
         signature: assertion.signature,
