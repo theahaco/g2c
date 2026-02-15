@@ -107,7 +107,19 @@ $requestBtn.addEventListener('click', () => {
   if (!currentHash) { alert('Generate a hash first'); return; }
 
   const callbackUrl = `${window.location.origin}${window.location.pathname}?result=1`;
-  const accountUrl = `http://${contractId.toLowerCase()}.localhost:3000/account/?sign=${currentHash}&callback=${encodeURIComponent(callbackUrl)}`;
+  // Derive account site domain: use same base domain as the dApp
+  // e.g. dApp on mysoroban.xyz → account on <id>.mysoroban.xyz
+  // e.g. dApp on localhost:3001 → account on <id>.localhost:3000
+  const dappHost = window.location.hostname;
+  const dappPort = window.location.port;
+  let accountBase;
+  if (dappHost === 'localhost' || dappHost === '127.0.0.1') {
+    accountBase = `${contractId.toLowerCase()}.localhost:3000`;
+  } else {
+    accountBase = `${contractId.toLowerCase()}.${dappHost}`;
+  }
+  const protocol = window.location.protocol;
+  const accountUrl = `${protocol}//${accountBase}/account/?sign=${currentHash}&callback=${encodeURIComponent(callbackUrl)}`;
   window.location.href = accountUrl;
 });
 

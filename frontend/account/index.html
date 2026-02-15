@@ -122,7 +122,7 @@ function loadCredential() {
 // --- Shared: register passkey ---
 
 async function registerPasskey() {
-  if (!contractId) throw new Error('Navigate to <contractId>.localhost:<port> to use');
+  if (!contractId) throw new Error('Navigate to <contractId>.<domain> to use');
 
   const userId = new Uint8Array(16);
   crypto.getRandomValues(userId);
@@ -199,7 +199,7 @@ function clearError() {
 }
 
 function updateStatusBar() {
-  document.getElementById('contract-id').textContent = contractId || '(visit via <contractId>.localhost:PORT)';
+  document.getElementById('contract-id').textContent = contractId || '(visit via <contractId>.<domain>)';
   document.getElementById('rp-id').textContent = rpId;
 
   const cred = loadCredential();
