@@ -94,3 +94,150 @@ This flow is atomic. If any part fails, the user retains funds in the G-address.
 - **Replay Protection:** SmartAccount nonce tracking (via OZ stellar-accounts) prevents replay of signed transactions. Each WebAuthn assertion includes a challenge bound to the specific transaction payload.
 - **RP Hash Binding:** Each signer's context rule records the RP ID hash, preventing cross-origin passkey reuse. The WebAuthn verifier checks `rpIdHash` in `authenticatorData` against the expected value.
 - **Scoped Sessions:** Context rules restrict session signers to specific contracts, functions, spending limits, and time windows — enforced on-chain by the SmartAccount before execution proceeds.
+
+## 6. Architecture Diagrams
+
+### System Overview
+
+```mermaid
+graph TB
+    subgraph "Cloudflare"
+        Worker["Cloudflare Worker<br/>*.mysoroban.xyz proxy"]
+        Pages["Cloudflare Pages<br/>Astro Static Site"]
+        Worker --> Pages
+    end
+
+    subgraph "Browser"
+        WebAuthn["WebAuthn API<br/>navigator.credentials"]
+        SDK["@g2c/passkey-sdk"]
+        Bindings["Contract Bindings<br/>factory / smart-account / verifier"]
+        StellarSDK["@stellar/stellar-sdk"]
+        SDK --> StellarSDK
+        Bindings --> StellarSDK
+    end
+
+    subgraph "Stellar Network"
+        Factory["g2c-factory"]
+        SmartAccount["g2c-smart-account"]
+        Verifier["g2c-webauthn-verifier"]
+        Factory -- "deploys" --> SmartAccount
+        Factory -- "lazy-deploys" --> Verifier
+        SmartAccount -- "verify()" --> Verifier
+    end
+
+    Pages --> SDK
+    Pages --> Bindings
+    Pages --> WebAuthn
+    StellarSDK -- "RPC" --> Factory
+    StellarSDK -- "RPC" --> SmartAccount
+```
+
+### Flow 1: Onboarding (G → C Migration)
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant Wallet as mysoroban.xyz
+    participant WebAuthn as WebAuthn API
+    participant Stellar as Stellar Network
+    participant Factory as g2c-factory
+    participant SA as SmartAccount
+    participant WV as WebAuthn Verifier
+
+    User->>Wallet: Open wallet
+    Wallet->>Wallet: Generate ephemeral keypair (G_temp)
+    Wallet-->>User: Display G-address for funding
+
+    User->>Stellar: Fund G_temp (Friendbot / CEX / etc.)
+
+    Wallet->>Factory: get_c_address(G_temp)
+    Factory-->>Wallet: Deterministic C-address
+
+    Wallet-->>User: Redirect to <C-addr>.mysoroban.xyz/new-account/
+
+    User->>WebAuthn: navigator.credentials.create()<br/>RP ID = <C-addr>.mysoroban.xyz
+    WebAuthn-->>Wallet: Registration response (P-256 public key)
+
+    Wallet->>Wallet: Extract 65-byte uncompressed pubkey
+    Wallet->>Wallet: Build TX: Factory.create_account(G_temp, pubkey)
+    Wallet->>Stellar: Simulate + Assemble + Sign with G_temp + Submit
+
+    Stellar->>Factory: create_account(G_temp, pubkey)
+    Factory->>WV: Try verify() — deploy if absent
+    Factory->>SA: Deploy with passkey as External signer
+
+    Stellar-->>Wallet: TX confirmed
+    Wallet-->>User: Redirect to <C-addr>.mysoroban.xyz/account/
+```
+
+### Flow 2: dApp Signature Request
+
+```mermaid
+sequenceDiagram
+    actor User
+    participant dApp as dApp (any origin)
+    participant Wallet as <C-addr>.mysoroban.xyz/account/
+    participant WebAuthn as WebAuthn API
+
+    dApp->>dApp: Construct transaction hash
+    dApp->>Wallet: Redirect: ?sign=<hash>&callback=<dapp-url>
+
+    Wallet-->>User: Display signature request
+    User->>WebAuthn: navigator.credentials.get()<br/>challenge = hash
+    WebAuthn-->>Wallet: Assertion (authenticatorData,<br/>clientDataJSON, signature)
+
+    Wallet->>Wallet: Convert DER signature to compact (r‖s)
+    Wallet->>dApp: Redirect to callback with query params:<br/>authenticatorData, clientDataJSON,<br/>signature, publicKey
+
+    dApp->>dApp: Inject signature into TX auth entries
+    dApp->>Stellar: Submit signed transaction
+```
+
+### Flow 3: On-Chain Auth
+
+```mermaid
+sequenceDiagram
+    participant Submitter as TX Submitter
+    participant Stellar as Stellar Runtime
+    participant SA as SmartAccount
+    participant OZ as OZ do_check_auth
+    participant WV as WebAuthn Verifier
+
+    Submitter->>Stellar: Submit TX invoking SmartAccount.execute()
+    Stellar->>SA: __check_auth(signature_payload, signatures, auth_contexts)
+    SA->>OZ: do_check_auth(...)
+
+    OZ->>OZ: Look up signer's context rule
+    OZ->>WV: verify(payload, pubkey, WebAuthnSigData)
+    WV->>WV: Validate secp256r1 signature<br/>against authData + clientData + challenge
+    WV-->>OZ: Valid / Invalid
+
+    OZ->>OZ: Enforce context rules<br/>(contracts, limits, time windows)
+    OZ-->>SA: Auth result
+    SA-->>Stellar: Auth result
+    Stellar->>Stellar: Execute transaction ops
+```
+
+### Contract Deployment Architecture
+
+```mermaid
+graph LR
+    subgraph "One-time Setup"
+        Install["stellar contract install<br/>(WASM → hashes)"]
+        Deploy["Deploy g2c-factory<br/>(hardcoded WASM hashes)"]
+        Install --> Deploy
+    end
+
+    subgraph "Per-User (via Factory)"
+        Funder["G_temp (funder)"]
+        FactoryC["g2c-factory"]
+        CAddr["SmartAccount<br/>at deterministic C-address"]
+        VerifierC["WebAuthn Verifier<br/>(shared singleton)"]
+
+        Funder -- "create_account(funder, pubkey)" --> FactoryC
+        FactoryC -- "deploy_v2<br/>salt=0x00..00" --> CAddr
+        FactoryC -- "lazy-deploy<br/>(try-invoke pattern)" --> VerifierC
+    end
+
+    Deploy --> FactoryC
+```
