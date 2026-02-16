@@ -28,4 +28,5 @@ clean:
     cargo clean
 
 cloudflare-deploy:
-    npx wrangler pages deploy frontend/ --project-name mysoroban
+    npm run build -w @g2c/frontend
+    npx wrangler pages deploy packages/frontend/dist/ --project-name mysoroban

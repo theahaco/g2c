@@ -1,0 +1,104 @@
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  font-family: system-ui, sans-serif;
+  max-width: 640px;
+  margin: 2rem auto;
+  padding: 0 1rem;
+  color: #e0e0e0;
+}
+
+h1 {
+  margin-bottom: 0.5rem;
+  color: #fff;
+}
+
+h2 {
+  margin: 1.5rem 0 0.5rem;
+  color: #ccc;
+  font-size: 1.1rem;
+}
+
+code {
+  background: #16213e;
+  padding: 0.15rem 0.4rem;
+  border-radius: 3px;
+  font-size: 0.85rem;
+  word-break: break-all;
+}
+
+button {
+  background: #0f3460;
+  color: #e0e0e0;
+  border: 1px solid #1a1a5e;
+  padding: 0.5rem 1.2rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.95rem;
+}
+
+button:hover {
+  background: #1a4a80;
+}
+
+button:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+
+input {
+  background: #16213e;
+  color: #e0e0e0;
+  border: 1px solid #333;
+  padding: 0.5rem;
+  border-radius: 4px;
+  width: 100%;
+  font-family: monospace;
+  font-size: 0.85rem;
+}
+
+pre {
+  background: #16213e;
+  padding: 0.75rem;
+  border-radius: 4px;
+  overflow-x: auto;
+  font-size: 0.8rem;
+  margin-top: 0.5rem;
+  white-space: pre-wrap;
+  word-break: break-all;
+  color: #a0d0a0;
+}
+
+.field {
+  margin: 0.5rem 0;
+}
+
+.field label {
+  display: block;
+  font-size: 0.85rem;
+  color: #999;
+  margin-bottom: 0.25rem;
+}
+
+.error {
+  color: #ff6b6b;
+}
+
+.info {
+  color: #999;
+  font-size: 0.85rem;
+  margin: 0.5rem 0;
+}
+
+section {
+  border-top: 1px solid #333;
+  padding-top: 1rem;
+}
+
+.hidden {
+  display: none;
+}
