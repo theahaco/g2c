@@ -78,6 +78,15 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   .button-link:hover {
     background: #1a8b4a;
   }
+
+  #deploy-result a {
+    color: #5bc0de;
+    text-decoration: underline;
+  }
+
+  #deploy-result a:hover {
+    color: #7dd4ed;
+  }
 </style>
 
 <script>
@@ -265,7 +274,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       }
 
       $deployResult.style.display = "block";
-      $deployResult.textContent = `Account deployed!\nC-address: ${contractId}`;
+      $deployResult.innerHTML = `Account deployed!\nC-address: <a href="https://stellar.expert/explorer/testnet/contract/${contractId}" target="_blank" rel="noopener">${contractId}</a>`;
 
       // Show link to account page
       const protocol = window.location.protocol;
