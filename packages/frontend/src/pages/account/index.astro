@@ -5,7 +5,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 <BaseLayout title="Soroban Passkey Account">
   <h1>Soroban Passkey</h1>
   <div id="status-bar">
-    <div>Contract: <code id="contract-id"></code></div>
+    <div>Contract: <code id="contract-id"></code> <a id="explorer-link" class="explorer-link" target="_blank" rel="noopener" style="display:none">View on Stellar Expert</a></div>
     <div>RP ID: <code id="rp-id"></code></div>
     <div>Stored key: <code id="stored-key">none</code></div>
   </div>
@@ -179,6 +179,17 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   .reregister-summary:hover {
     color: #c0d0e0;
   }
+
+  .explorer-link {
+    color: #5bc0de;
+    text-decoration: underline;
+    font-size: 0.8rem;
+    margin-left: 0.5rem;
+  }
+
+  .explorer-link:hover {
+    color: #7dd4ed;
+  }
 </style>
 
 <script>
@@ -326,6 +337,12 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     document.getElementById("contract-id")!.textContent =
       contractId || "(visit via <contractId>.<domain>)";
     document.getElementById("rp-id")!.textContent = rpId;
+
+    const $explorerLink = document.getElementById("explorer-link") as HTMLAnchorElement;
+    if (contractId) {
+      $explorerLink.href = `https://stellar.expert/explorer/testnet/contract/${contractId}`;
+      $explorerLink.style.display = "inline";
+    }
 
     const cred = loadCredential();
     document.getElementById("stored-key")!.textContent = cred ? cred.publicKey : "none";
