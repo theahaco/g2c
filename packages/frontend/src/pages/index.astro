@@ -1,0 +1,139 @@
+---
+import BaseLayout from "../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="G2C — Generate Account">
+  <h1>G2C Migration</h1>
+  <p class="info">Generate a funded Stellar keypair and predict your smart account C-address.</p>
+
+  <div id="error-box" class="error" style="display:none"></div>
+
+  <section>
+    <h2>1. Generate & Fund Keypair</h2>
+    <p class="info">Creates a random keypair and funds it via Friendbot on testnet.</p>
+    <div class="field">
+      <button id="generate-btn">Generate & Fund</button>
+    </div>
+    <pre id="keypair-result" style="display:none"></pre>
+  </section>
+
+  <section id="address-section" class="hidden">
+    <h2>2. Predicted C-Address</h2>
+    <p class="info">The smart account address that will be deployed by the factory.</p>
+    <pre id="c-address-result"></pre>
+  </section>
+
+  <section id="nav-section" class="hidden">
+    <h2>3. Create Smart Account</h2>
+    <p class="info">Navigate to your account's subdomain to register a passkey and deploy.</p>
+    <div class="field">
+      <a id="create-link" class="button-link">Create Account</a>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  body {
+    background: #1a1a2e;
+  }
+
+  .button-link {
+    display: inline-block;
+    background: #1a6b3a;
+    color: #e0e0e0;
+    border: 1px solid #1a8b4a;
+    padding: 0.5rem 1.2rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    text-decoration: none;
+  }
+
+  .button-link:hover {
+    background: #1a8b4a;
+  }
+</style>
+
+<script>
+  import { Keypair, Networks } from "@stellar/stellar-sdk";
+  import { Client } from "factory";
+
+  const FACTORY_CONTRACT_ID = "CC3UFW4NBS64DGOBCWZEQ5NZGYIKJUGOLFLW7H3RPEBKR5RKBYRL4W67";
+  const RPC_URL = "https://soroban-testnet.stellar.org";
+  const FRIENDBOT_URL = "https://friendbot.stellar.org";
+
+  const $generateBtn = document.getElementById("generate-btn") as HTMLButtonElement;
+  const $keypairResult = document.getElementById("keypair-result") as HTMLPreElement;
+  const $addressSection = document.getElementById("address-section")!;
+  const $cAddressResult = document.getElementById("c-address-result") as HTMLPreElement;
+  const $navSection = document.getElementById("nav-section")!;
+  const $createLink = document.getElementById("create-link") as HTMLAnchorElement;
+  const $errorBox = document.getElementById("error-box")!;
+
+  function showError(msg: string) {
+    $errorBox.textContent = msg;
+    $errorBox.style.display = "block";
+  }
+
+  function clearError() {
+    $errorBox.style.display = "none";
+  }
+
+  $generateBtn.addEventListener("click", async () => {
+    clearError();
+    $generateBtn.disabled = true;
+    $generateBtn.textContent = "Generating...";
+
+    try {
+      const keypair = Keypair.random();
+      const publicKey = keypair.publicKey();
+      const secret = keypair.secret();
+
+      $keypairResult.style.display = "block";
+      $keypairResult.textContent = `Public: ${publicKey}\nSecret: ${secret}`;
+
+      // Fund via Friendbot
+      $generateBtn.textContent = "Funding via Friendbot...";
+      const res = await fetch(`${FRIENDBOT_URL}?addr=${publicKey}`);
+      if (!res.ok) throw new Error(`Friendbot failed: ${res.status}`);
+
+      $keypairResult.textContent += "\n\nFunded on testnet!";
+
+      // Get predicted C-address
+      $generateBtn.textContent = "Predicting C-address...";
+      const client = new Client({
+        contractId: FACTORY_CONTRACT_ID,
+        networkPassphrase: Networks.TESTNET,
+        rpcUrl: RPC_URL,
+        publicKey: publicKey,
+      });
+
+      const tx = await client.get_c_address({ funder: publicKey });
+      const cAddress = tx.result;
+
+      $addressSection.classList.remove("hidden");
+      $cAddressResult.textContent = cAddress;
+
+      // Build navigation link
+      const host = window.location.hostname;
+      const protocol = window.location.protocol;
+      let accountBase: string;
+      if (host === "localhost" || host === "127.0.0.1") {
+        accountBase = `${cAddress}.localhost:${window.location.port || "3000"}`;
+      } else {
+        accountBase = `${cAddress}.${host}`;
+      }
+      const newAccountUrl = `${protocol}//${accountBase}/new-account/?key=${secret}`;
+
+      $navSection.classList.remove("hidden");
+      $createLink.href = newAccountUrl;
+      console.log($createLink);
+      $generateBtn.textContent = "Generate & Fund";
+      $generateBtn.disabled = false;
+    } catch (err: any) {
+      showError(err.message || String(err));
+      $generateBtn.textContent = "Generate & Fund";
+      $generateBtn.disabled = false;
+    }
+  });
+</script>
