@@ -1,0 +1,256 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="G2C — New Account">
+  <h1>New Smart Account</h1>
+  <div id="status-bar">
+    <div>Contract: <code id="contract-id"></code></div>
+    <div>RP ID: <code id="rp-id"></code></div>
+  </div>
+
+  <div id="error-box" class="error" style="display:none"></div>
+
+  <section>
+    <h2>1. Register Passkey</h2>
+    <p class="info">Creates a new passkey bound to this account's subdomain.</p>
+    <div class="field">
+      <button id="register-btn">Register Passkey</button>
+    </div>
+    <pre id="register-result" style="display:none"></pre>
+  </section>
+
+  <section id="deploy-section" class="hidden">
+    <h2>2. Deploy Smart Account</h2>
+    <p class="info">Deploys the smart account on-chain with your passkey.</p>
+    <div class="field">
+      <button id="deploy-btn" class="primary">Deploy Account</button>
+    </div>
+    <pre id="deploy-result" style="display:none"></pre>
+  </section>
+
+  <section id="done-section" class="hidden">
+    <h2>Account Created</h2>
+    <p class="info">Your smart account is deployed and ready to use.</p>
+    <div class="field">
+      <a id="account-link" class="button-link">Go to Account</a>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  body {
+    background: #1a1a2e;
+  }
+
+  button.primary {
+    background: #1a6b3a;
+    border-color: #1a8b4a;
+    font-size: 1.1rem;
+    padding: 0.7rem 2rem;
+  }
+
+  button.primary:hover {
+    background: #1a8b4a;
+  }
+
+  #status-bar {
+    background: #0a2040;
+    border: 1px solid #1a3060;
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    margin: 1rem 0;
+    font-size: 0.85rem;
+  }
+
+  .button-link {
+    display: inline-block;
+    background: #1a6b3a;
+    color: #e0e0e0;
+    border: 1px solid #1a8b4a;
+    padding: 0.5rem 1.2rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    text-decoration: none;
+  }
+
+  .button-link:hover {
+    background: #1a8b4a;
+  }
+</style>
+
+<script>
+  import { Keypair, Networks, TransactionBuilder } from "@stellar/stellar-sdk";
+  import { Client } from "factory";
+  import { Buffer } from "buffer";
+  import { extractPublicKey } from "@g2c/passkey-sdk";
+  import { buf2hex, buf2base64url } from "../../lib/encoding";
+
+  const FACTORY_CONTRACT_ID = "CCOHL6VANAMJZ3ZNL6I6T3NOXPE4Z357BGETF64DHCER7CIPVIZFKLPO";
+  const RPC_URL = "https://soroban-testnet.stellar.org";
+
+  // --- State ---
+
+  const hostname = window.location.hostname;
+  const parts = hostname.split(".");
+  const contractId = parts.length > 1 ? parts[0].toUpperCase() : null;
+  const rpId = hostname;
+
+  const params = new URLSearchParams(window.location.search);
+  const secretKey = params.get("key");
+
+  let passkeyPublicKey: Uint8Array | null = null;
+  let credentialIdBytes: Uint8Array | null = null;
+
+  // --- UI refs ---
+
+  const $contractIdEl = document.getElementById("contract-id")!;
+  const $rpIdEl = document.getElementById("rp-id")!;
+  const $errorBox = document.getElementById("error-box")!;
+  const $registerBtn = document.getElementById("register-btn") as HTMLButtonElement;
+  const $registerResult = document.getElementById("register-result") as HTMLPreElement;
+  const $deploySection = document.getElementById("deploy-section")!;
+  const $deployBtn = document.getElementById("deploy-btn") as HTMLButtonElement;
+  const $deployResult = document.getElementById("deploy-result") as HTMLPreElement;
+  const $doneSection = document.getElementById("done-section")!;
+  const $accountLink = document.getElementById("account-link") as HTMLAnchorElement;
+
+  // --- UI helpers ---
+
+  function showError(msg: string) {
+    $errorBox.textContent = msg;
+    $errorBox.style.display = "block";
+  }
+
+  function clearError() {
+    $errorBox.style.display = "none";
+  }
+
+  // --- Init status bar ---
+
+  $contractIdEl.textContent = contractId || "(visit via <contractId>.<domain>)";
+  $rpIdEl.textContent = rpId;
+
+  if (!contractId) {
+    showError("Navigate to <contractId>.<domain>/new-account/ to use this page.");
+  }
+
+  if (!secretKey) {
+    showError("Missing ?key= parameter. Start from the root page.");
+  }
+
+  // --- Register Passkey ---
+
+  $registerBtn.addEventListener("click", async () => {
+    clearError();
+    if (!contractId) {
+      showError("No contract ID found in subdomain.");
+      return;
+    }
+
+    try {
+      $registerBtn.disabled = true;
+      $registerBtn.textContent = "Waiting for authenticator...";
+
+      const userId = new Uint8Array(16);
+      crypto.getRandomValues(userId);
+
+      const credential = (await navigator.credentials.create({
+        publicKey: {
+          challenge: crypto.getRandomValues(new Uint8Array(32)),
+          rp: { name: `Soroban ${contractId.slice(0, 8)}...`, id: rpId },
+          user: {
+            id: userId,
+            name: contractId,
+            displayName: `Account ${contractId.slice(0, 8)}...${contractId.slice(-4)}`,
+          },
+          pubKeyCredParams: [{ alg: -7, type: "public-key" }],
+          authenticatorSelection: {
+            residentKey: "required",
+            userVerification: "required",
+          },
+          attestation: "none",
+          timeout: 60000,
+        },
+      })) as PublicKeyCredential;
+
+      const response = credential.response as AuthenticatorAttestationResponse;
+      passkeyPublicKey = extractPublicKey(response);
+      credentialIdBytes = new Uint8Array(credential.rawId);
+
+      // Save to localStorage (same format as account page)
+      const storagePrefix = `passkey:${contractId}:`;
+      localStorage.setItem(storagePrefix + "credentialId", buf2base64url(credentialIdBytes));
+      localStorage.setItem(storagePrefix + "publicKey", buf2hex(passkeyPublicKey));
+
+      $registerResult.style.display = "block";
+      $registerResult.textContent = JSON.stringify(
+        {
+          credentialId: buf2base64url(credentialIdBytes),
+          publicKey: buf2hex(passkeyPublicKey),
+          rpId: rpId,
+        },
+        null,
+        2
+      );
+
+      $registerBtn.textContent = "Passkey Registered";
+      $deploySection.classList.remove("hidden");
+    } catch (err: any) {
+      showError(`Registration failed: ${err.message}`);
+      $registerBtn.disabled = false;
+      $registerBtn.textContent = "Register Passkey";
+    }
+  });
+
+  // --- Deploy Account ---
+
+  $deployBtn.addEventListener("click", async () => {
+    clearError();
+    if (!passkeyPublicKey || !secretKey) {
+      showError("Register a passkey first and ensure ?key= is set.");
+      return;
+    }
+
+    try {
+      $deployBtn.disabled = true;
+      $deployBtn.textContent = "Deploying...";
+
+      const keypair = Keypair.fromSecret(secretKey);
+
+      const client = new Client({
+        contractId: FACTORY_CONTRACT_ID,
+        networkPassphrase: Networks.TESTNET,
+        rpcUrl: RPC_URL,
+        publicKey: keypair.publicKey(),
+        signTransaction: async (xdr: string) => {
+          const tx = TransactionBuilder.fromXDR(xdr, Networks.TESTNET);
+          tx.sign(keypair);
+          return tx.toXDR();
+        },
+      });
+
+      const tx = await client.create_account({
+        funder: keypair.publicKey(),
+        key: Buffer.from(passkeyPublicKey),
+      });
+      const result = await tx.signAndSend();
+
+      $deployResult.style.display = "block";
+      $deployResult.textContent = `Account deployed!\nC-address: ${contractId}`;
+
+      // Show link to account page
+      const protocol = window.location.protocol;
+      const host = window.location.host;
+      $accountLink.href = `${protocol}//${host}/account/`;
+      $doneSection.classList.remove("hidden");
+
+      $deployBtn.textContent = "Deployed";
+    } catch (err: any) {
+      showError(`Deploy failed: ${err.message}`);
+      $deployBtn.disabled = false;
+      $deployBtn.textContent = "Deploy Account";
+    }
+  });
+</script>
