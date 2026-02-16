@@ -3,8 +3,7 @@
 #![allow(clippy::ref_option)]
 
 use soroban_sdk::{
-    contract, contractimpl, deploy::DeployerWithAddress, symbol_short, vec, Address, Bytes, BytesN,
-    Env, InvokeError,
+    contract, contractimpl, deploy::DeployerWithAddress, Address, Bytes, BytesN, Env,
 };
 use soroban_sdk_tools::{contractstorage, InstanceItem};
 use stellar_accounts::smart_account::Signer;
@@ -53,11 +52,8 @@ impl Contract {
         let bytes: BytesN<32> = BytesN::from_array(e, VERIFIER);
         let deployer = e.deployer().with_current_contract(bytes.clone());
         let address = deployer.deployed_address();
-        if let Err(_) = e.try_invoke_contract::<bool, InvokeError>(
-            &address,
-            &symbol_short!("verify"),
-            vec![e, bytes.to_val(), bytes.to_val(), bytes.to_val()],
-        ) {
+
+        if address.executable().is_none() {
             deployer.deploy_v2(bytes, ())
         } else {
             address

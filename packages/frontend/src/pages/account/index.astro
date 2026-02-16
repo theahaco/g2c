@@ -39,17 +39,42 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
   <!-- Home mode UI -->
   <div id="home-mode" class="hidden">
-    <section id="register-section">
-      <h2>1. Register Passkey</h2>
+    <!-- Shown when a passkey is already registered -->
+    <section id="passkey-info-section" class="hidden">
+      <h2>Passkey</h2>
+      <div class="passkey-details">
+        <div class="passkey-status">Registered</div>
+        <div class="passkey-field">
+          <span class="passkey-label">Public Key</span>
+          <code id="passkey-pubkey" class="passkey-value"></code>
+        </div>
+        <div class="passkey-field">
+          <span class="passkey-label">Credential ID</span>
+          <code id="passkey-cred-id" class="passkey-value"></code>
+        </div>
+      </div>
+      <details style="margin-top:0.75rem">
+        <summary class="reregister-summary">Re-register Passkey</summary>
+        <p class="info" style="margin-top:0.5rem">Replace the locally stored passkey credential. Note: this does not change the on-chain signer.</p>
+        <div class="field">
+          <button id="reregister-btn">Re-register</button>
+        </div>
+      </details>
+      <pre id="register-result" style="display:none"></pre>
+    </section>
+
+    <!-- Shown when no passkey is registered -->
+    <section id="register-section" class="hidden">
+      <h2>Register Passkey</h2>
       <p class="info">Creates a new passkey bound to this contract's subdomain.</p>
       <div class="field">
         <button id="register-btn">Register Passkey</button>
       </div>
-      <pre id="register-result" style="display:none"></pre>
+      <pre id="no-key-register-result" style="display:none"></pre>
     </section>
 
     <section id="sign-section">
-      <h2>2. Sign a Hash</h2>
+      <h2>Sign a Hash</h2>
       <p class="info">Authenticate with your passkey to sign a 32-byte hash (e.g. a transaction hash).</p>
       <div class="field">
         <label for="hash-input">Hash to sign (64 hex chars)</label>
@@ -113,6 +138,46 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     color: #c0c0c0;
     margin: 0.75rem 0;
     word-break: break-all;
+  }
+
+  .passkey-details {
+    background: #0a2040;
+    border: 1px solid #1a3060;
+    border-radius: 6px;
+    padding: 0.75rem 1rem;
+  }
+
+  .passkey-status {
+    color: #6fcf97;
+    font-weight: 600;
+    margin-bottom: 0.5rem;
+  }
+
+  .passkey-field {
+    margin: 0.4rem 0;
+    font-size: 0.85rem;
+  }
+
+  .passkey-label {
+    color: #8899aa;
+    display: block;
+    margin-bottom: 0.15rem;
+  }
+
+  .passkey-value {
+    color: #c0d0e0;
+    word-break: break-all;
+    font-size: 0.8rem;
+  }
+
+  .reregister-summary {
+    color: #8899aa;
+    cursor: pointer;
+    font-size: 0.85rem;
+  }
+
+  .reregister-summary:hover {
+    color: #c0d0e0;
   }
 </style>
 
@@ -363,11 +428,16 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   // HOME MODE
   // =====================
 
+  function showPasskeyInfo(cred: { credentialId: Uint8Array; publicKey: string }) {
+    document.getElementById("passkey-info-section")!.classList.remove("hidden");
+    document.getElementById("register-section")!.classList.add("hidden");
+    document.getElementById("passkey-pubkey")!.textContent = cred.publicKey;
+    document.getElementById("passkey-cred-id")!.textContent = buf2base64url(cred.credentialId);
+  }
+
   function initHomeMode() {
     document.getElementById("home-mode")!.classList.remove("hidden");
 
-    const $registerBtn = document.getElementById("register-btn") as HTMLButtonElement;
-    const $registerResult = document.getElementById("register-result") as HTMLPreElement;
     const $signBtn = document.getElementById("sign-btn") as HTMLButtonElement;
     const $signResult = document.getElementById("sign-result") as HTMLPreElement;
     const $hashInput = document.getElementById("hash-input") as HTMLInputElement;
@@ -375,21 +445,23 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
     const cred = loadCredential();
     if (cred) {
+      showPasskeyInfo(cred);
       $signBtn.disabled = false;
-      $registerBtn.textContent = "Re-register Passkey";
+    } else {
+      document.getElementById("register-section")!.classList.remove("hidden");
     }
 
-    // Register
-    $registerBtn.addEventListener("click", async () => {
+    // Re-register (when passkey already exists)
+    async function handleRegister(btn: HTMLButtonElement, resultEl: HTMLPreElement) {
       clearError();
       try {
-        $registerBtn.disabled = true;
-        $registerBtn.textContent = "Waiting for authenticator...";
+        btn.disabled = true;
+        btn.textContent = "Waiting for authenticator...";
 
         const { credentialId, publicKey } = await registerPasskey();
 
-        $registerResult.style.display = "block";
-        $registerResult.textContent = JSON.stringify(
+        resultEl.style.display = "block";
+        resultEl.textContent = JSON.stringify(
           {
             credentialId: buf2base64url(credentialId),
             publicKey: buf2hex(publicKey),
@@ -401,14 +473,25 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
         updateStatusBar();
         $signBtn.disabled = false;
-        $registerBtn.textContent = "Re-register Passkey";
+
+        // Switch to info view
+        const newCred = loadCredential();
+        if (newCred) showPasskeyInfo(newCred);
       } catch (err: any) {
         showError(`Registration failed: ${err.message}`);
       } finally {
-        $registerBtn.disabled = false;
-        if (!loadCredential()) $registerBtn.textContent = "Register Passkey";
+        btn.disabled = false;
+        btn.textContent = btn.id === "reregister-btn" ? "Re-register" : "Register Passkey";
       }
-    });
+    }
+
+    const $reregisterBtn = document.getElementById("reregister-btn") as HTMLButtonElement;
+    const $registerResult = document.getElementById("register-result") as HTMLPreElement;
+    $reregisterBtn.addEventListener("click", () => handleRegister($reregisterBtn, $registerResult));
+
+    const $registerBtn = document.getElementById("register-btn") as HTMLButtonElement;
+    const $noKeyRegisterResult = document.getElementById("no-key-register-result") as HTMLPreElement;
+    $registerBtn.addEventListener("click", () => handleRegister($registerBtn, $noKeyRegisterResult));
 
     // Sign
     $signBtn.addEventListener("click", async () => {
