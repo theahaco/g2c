@@ -1,0 +1,28 @@
+{
+  "name": "@g2c/passkey-sdk",
+  "version": "0.1.0",
+  "description": "WebAuthn/passkey authentication SDK for Soroban smart accounts",
+  "type": "module",
+  "main": "./dist/index.js",
+  "types": "./dist/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./dist/index.d.ts",
+      "default": "./dist/index.js"
+    }
+  },
+  "files": [
+    "dist"
+  ],
+  "scripts": {
+    "build": "tsc"
+  },
+  "peerDependencies": {
+    "@stellar/stellar-sdk": ">=11.3.0"
+  },
+  "devDependencies": {
+    "@stellar/stellar-sdk": "^14.5.0",
+    "@types/node": "^22.0.0",
+    "typescript": "^5.9.3"
+  }
+}
