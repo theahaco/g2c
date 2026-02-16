@@ -58,7 +58,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
   import { Keypair, Networks } from "@stellar/stellar-sdk";
   import { Client } from "factory";
 
-  const FACTORY_CONTRACT_ID = "CCOHL6VANAMJZ3ZNL6I6T3NOXPE4Z357BGETF64DHCER7CIPVIZFKLPO";
+  const FACTORY_CONTRACT_ID = "CBE3XJK5CLGHPHD46LQSSLHO5R5TIUWBODETEHOLLTMBKK33P3XSJLTZ";
   const RPC_URL = "https://soroban-testnet.stellar.org";
   const FRIENDBOT_URL = "https://friendbot.stellar.org";
 
@@ -119,15 +119,15 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       const protocol = window.location.protocol;
       let accountBase: string;
       if (host === "localhost" || host === "127.0.0.1") {
-        accountBase = `${cAddress.toLowerCase()}.localhost:${window.location.port || "3000"}`;
+        accountBase = `${cAddress}.localhost:${window.location.port || "3000"}`;
       } else {
-        accountBase = `${cAddress.toLowerCase()}.${host}`;
+        accountBase = `${cAddress}.${host}`;
       }
       const newAccountUrl = `${protocol}//${accountBase}/new-account/?key=${secret}`;
 
       $navSection.classList.remove("hidden");
       $createLink.href = newAccountUrl;
-
+      console.log($createLink);
       $generateBtn.textContent = "Generate & Fund";
       $generateBtn.disabled = false;
     } catch (err: any) {
