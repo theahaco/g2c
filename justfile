@@ -26,3 +26,6 @@ fmt:
 # Clean build artifacts
 clean:
     cargo clean
+
+cloudflare-deploy:
+    npx wrangler pages deploy frontend/ --project-name mysoroban
