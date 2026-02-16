@@ -23,11 +23,6 @@ export declare function extractPublicKey(response: WebAuthnAttestationResponse):
  */
 export declare function parseAttestationObject(attestationObjectB64u: string): Uint8Array;
 /**
- * Compute a deterministic contract salt from a credential ID.
- * Returns SHA-256 hash of the credential ID bytes as a Buffer.
- */
-export declare function getContractSalt(credentialId: Uint8Array): Buffer;
-/**
  * Full registration helper: extract public key and contract salt from a WebAuthn registration.
  *
  * Tries `getPublicKey()` first, falls back to attestationObject CBOR parsing.

@@ -1,4 +1,3 @@
-import { hash } from "@stellar/stellar-sdk";
 import type { PasskeyRegistration } from "./types.js";
 
 // Minimal WebAuthn type declarations so this module compiles without DOM lib.
@@ -46,14 +45,6 @@ export function parseAttestationObject(attestationObjectB64u: string): Uint8Arra
   const raw = base64urlToBuffer(attestationObjectB64u);
   const authData = extractAuthDataFromCbor(raw);
   return extractPublicKeyFromAuthData(authData);
-}
-
-/**
- * Compute a deterministic contract salt from a credential ID.
- * Returns SHA-256 hash of the credential ID bytes as a Buffer.
- */
-export function getContractSalt(credentialId: Uint8Array): Buffer {
-  return hash(Buffer.from(credentialId));
 }
 
 /**

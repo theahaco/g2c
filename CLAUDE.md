@@ -39,5 +39,5 @@ Tests use synthetic P-256 keypairs (`SigningKey::random()`) to construct full We
 - `stellar-accounts` is pinned to a git rev of OpenZeppelin/stellar-contracts to match `soroban-sdk` 25.x
 
 
-~## Development Workflow
-- When you're done with a task where code was created or files edited, please run the gitbutler mcp update_branches command.~
+## Development Workflow
+- When you're done with a task where code was created or files edited, please run the gitbutler mcp update_branches command. Branches should have meaningful names and changes should be added to the apporpriate branch.

@@ -1,4 +1,3 @@
-import { hash } from "@stellar/stellar-sdk";
 /**
  * Extract 65-byte uncompressed P-256 public key from an AuthenticatorAttestationResponse.
  *
@@ -29,13 +28,6 @@ export function parseAttestationObject(attestationObjectB64u) {
     const raw = base64urlToBuffer(attestationObjectB64u);
     const authData = extractAuthDataFromCbor(raw);
     return extractPublicKeyFromAuthData(authData);
-}
-/**
- * Compute a deterministic contract salt from a credential ID.
- * Returns SHA-256 hash of the credential ID bytes as a Buffer.
- */
-export function getContractSalt(credentialId) {
-    return hash(Buffer.from(credentialId));
 }
 /**
  * Full registration helper: extract public key and contract salt from a WebAuthn registration.

@@ -1,5 +1,12 @@
 import { StrKey, xdr, hash, Address, Account, TransactionBuilder, Operation, rpc, } from "@stellar/stellar-sdk";
 /**
+ * Compute a deterministic contract salt from a credential ID.
+ * Returns SHA-256 hash of the credential ID bytes as a Buffer.
+ */
+export function getContractSalt(credentialId) {
+    return hash(Buffer.from(credentialId));
+}
+/**
  * Compute the deterministic smart account address that the factory will deploy to.
  *
  * @param factoryContractId - The factory contract address

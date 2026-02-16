@@ -1,6 +1,11 @@
 import { Keypair } from "@stellar/stellar-sdk";
 import type { NetworkConfig } from "./types.js";
 /**
+ * Compute a deterministic contract salt from a credential ID.
+ * Returns SHA-256 hash of the credential ID bytes as a Buffer.
+ */
+export declare function getContractSalt(credentialId: Uint8Array): Buffer;
+/**
  * Compute the deterministic smart account address that the factory will deploy to.
  *
  * @param factoryContractId - The factory contract address

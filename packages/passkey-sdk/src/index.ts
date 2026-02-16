@@ -7,7 +7,6 @@ export type {
 export {
   extractPublicKey,
   parseAttestationObject,
-  getContractSalt,
   parseRegistration,
 } from "./webauthn.js";
 
@@ -21,6 +20,7 @@ export {
 } from "./auth.js";
 
 export {
+  getContractSalt,
   computeAccountAddress,
   lookupExistingAccount,
   deploySmartAccount,
