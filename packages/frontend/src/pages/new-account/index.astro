@@ -81,8 +81,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 </style>
 
 <script>
-  import { Keypair, Networks, TransactionBuilder } from "@stellar/stellar-sdk";
-  import { Client } from "factory";
+  import { Keypair, Networks, TransactionBuilder, Operation, Address, Account, rpc, xdr } from "@stellar/stellar-sdk";
   import { Buffer } from "buffer";
   import { extractPublicKey } from "@g2c/passkey-sdk";
   import { buf2hex, buf2base64url } from "../../lib/encoding";
@@ -218,24 +217,52 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       $deployBtn.textContent = "Deploying...";
 
       const keypair = Keypair.fromSecret(secretKey);
+      const server = new rpc.Server(RPC_URL);
 
-      const client = new Client({
-        contractId: FACTORY_CONTRACT_ID,
+      const sourceAccount = await server
+        .getAccount(keypair.publicKey())
+        .then((res: Account) => new Account(res.accountId(), res.sequenceNumber()));
+
+      const simTxn = new TransactionBuilder(sourceAccount, {
+        fee: "100",
         networkPassphrase: Networks.TESTNET,
-        rpcUrl: RPC_URL,
-        publicKey: keypair.publicKey(),
-        signTransaction: async (xdr: string) => {
-          const tx = TransactionBuilder.fromXDR(xdr, Networks.TESTNET);
-          tx.sign(keypair);
-          return tx.toXDR();
-        },
-      });
+      })
+        .addOperation(
+          Operation.invokeContractFunction({
+            contract: FACTORY_CONTRACT_ID,
+            function: "create_account",
+            args: [
+              Address.fromString(keypair.publicKey()).toScVal(),
+              xdr.ScVal.scvBytes(Buffer.from(passkeyPublicKey)),
+            ],
+          })
+        )
+        .setTimeout(0)
+        .build();
 
-      const tx = await client.create_account({
-        funder: keypair.publicKey(),
-        key: Buffer.from(passkeyPublicKey),
-      });
-      const result = await tx.signAndSend();
+      const sim = await server.simulateTransaction(simTxn);
+      if (rpc.Api.isSimulationError(sim) || rpc.Api.isSimulationRestore(sim)) {
+        throw new Error(`Simulation failed: ${"error" in sim ? sim.error : "restore needed"}`);
+      }
+
+      const transaction = rpc.assembleTransaction(simTxn, sim).setTimeout(0).build();
+      transaction.sign(keypair);
+
+      const sendResponse = await server.sendTransaction(transaction);
+      if (sendResponse.status === "ERROR") {
+        throw new Error(`Transaction submission failed: ${sendResponse.status}`);
+      }
+
+      // Poll for completion
+      let getResponse = await server.getTransaction(sendResponse.hash);
+      while (getResponse.status === "NOT_FOUND") {
+        await new Promise((r) => setTimeout(r, 1000));
+        getResponse = await server.getTransaction(sendResponse.hash);
+      }
+
+      if (getResponse.status !== "SUCCESS") {
+        throw new Error(`Transaction failed: ${getResponse.status}`);
+      }
 
       $deployResult.style.display = "block";
       $deployResult.textContent = `Account deployed!\nC-address: ${contractId}`;
