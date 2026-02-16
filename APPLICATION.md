@@ -6,7 +6,7 @@ Passkey-Native C-Address Onboarding Kit
 > Use less than 130 characters to describe the products/services you're planning to build in your submission, how it works, and your target audience. This is your opportunity to capture the attention of your reader and gain buy-in! A frequently used format is: "Develops/Offers/Gives/etc. _(a defined offering)_ to help/support _(a defined audience)_ _(solve a problem)_ with _(secret sauce)_". Read more about this format and see examples in this blog post.
 
 ## One Sentence Description:
-Delivers smart contracts, a passkey wallet, and an onboarding SDK to help Stellar wallets migrate users from G-addresses to C-addresses seamlessly.
+Delivers smart contracts, a passkey wallet web app, and an onboarding SDK to migrate users from G-addresses to C-addresses seamlessly.
 
 > Enter a relevant URL for this submission. This can be, for example, a front-end interface or any part of the project already developed — particularly relevant if the project is already live on another blockchain.
 

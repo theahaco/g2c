@@ -37,3 +37,7 @@ Tests use synthetic P-256 keypairs (`SigningKey::random()`) to construct full We
 ## Dependency Version Constraints
 
 - `stellar-accounts` is pinned to a git rev of OpenZeppelin/stellar-contracts to match `soroban-sdk` 25.x
+
+
+~## Development Workflow
+- When you're done with a task where code was created or files edited, please run the gitbutler mcp update_branches command.~
