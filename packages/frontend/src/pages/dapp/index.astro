@@ -146,12 +146,21 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     );
   }
 
+  // Pre-populate from URL param
+  const urlParams = new URLSearchParams(window.location.search);
+  const contractParam = urlParams.get("contract");
+  if (contractParam) {
+    $contractInput.value = contractParam;
+  }
+
   // Update source display when contract changes
-  $contractInput.addEventListener("input", () => {
+  function updateSourceDisplay() {
     const id = $contractInput.value.trim();
     $txSource.textContent = id.length > 12 ? `${id.slice(0, 4)}...${id.slice(-4)}` : id;
-  });
-  $txSource.textContent = "CAAA...BSC4";
+  }
+
+  $contractInput.addEventListener("input", updateSourceDisplay);
+  updateSourceDisplay();
 
   // Generate hash
   $generateBtn.addEventListener("click", () => {

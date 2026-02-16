@@ -30,6 +30,12 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       <a id="create-link" class="button-link">Create Account</a>
     </div>
   </section>
+
+  <section id="accounts-section" class="hidden">
+    <h2>Your Accounts</h2>
+    <p class="info">Previously created smart accounts.</p>
+    <ul id="accounts-list"></ul>
+  </section>
 </BaseLayout>
 
 <style>
@@ -51,6 +57,27 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 
   .button-link:hover {
     background: #1a8b4a;
+  }
+
+  #accounts-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0;
+  }
+
+  #accounts-list li {
+    margin: 0.4rem 0;
+  }
+
+  #accounts-list a {
+    color: #5bc0de;
+    text-decoration: underline;
+    font-family: monospace;
+    font-size: 0.85rem;
+  }
+
+  #accounts-list a:hover {
+    color: #7dd4ed;
   }
 </style>
 
@@ -77,6 +104,32 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 
   function clearError() {
     $errorBox.style.display = "none";
+  }
+
+  // Show previously created accounts
+  const savedAccounts: string[] = JSON.parse(localStorage.getItem("g2c:accounts") || "[]");
+  if (savedAccounts.length > 0) {
+    const $accountsSection = document.getElementById("accounts-section")!;
+    const $accountsList = document.getElementById("accounts-list")!;
+    $accountsSection.classList.remove("hidden");
+
+    const host = window.location.hostname;
+    const protocol = window.location.protocol;
+
+    for (const cAddress of savedAccounts) {
+      let accountBase: string;
+      if (host === "localhost" || host === "127.0.0.1") {
+        accountBase = `${cAddress.toLowerCase()}.localhost:${window.location.port || "3000"}`;
+      } else {
+        accountBase = `${cAddress.toLowerCase()}.${host}`;
+      }
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = `${protocol}//${accountBase}/account/`;
+      a.textContent = cAddress;
+      li.appendChild(a);
+      $accountsList.appendChild(li);
+    }
   }
 
   $generateBtn.addEventListener("click", async () => {

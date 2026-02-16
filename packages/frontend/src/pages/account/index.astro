@@ -73,6 +73,14 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       <pre id="no-key-register-result" style="display:none"></pre>
     </section>
 
+    <section id="dapp-section">
+      <h2>Try dApp</h2>
+      <p class="info">Test a signature request flow with the demo dApp.</p>
+      <div class="field">
+        <a id="dapp-link" class="button-link">Open Demo dApp</a>
+      </div>
+    </section>
+
     <section id="sign-section">
       <h2>Sign a Hash</h2>
       <p class="info">Authenticate with your passkey to sign a 32-byte hash (e.g. a transaction hash).</p>
@@ -561,6 +569,24 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   // --- Init ---
 
   updateStatusBar();
+
+  // Set dApp link
+  if (contractId) {
+    const $dappLink = document.getElementById("dapp-link") as HTMLAnchorElement;
+    const protocol = window.location.protocol;
+    const host = window.location.hostname;
+    let dappBase: string;
+    if (host === "localhost" || host.endsWith(".localhost")) {
+      const port = window.location.port || "3000";
+      dappBase = `localhost:${port}`;
+    } else {
+      // strip the contract subdomain to get the root domain
+      const rootHost = host.split(".").slice(1).join(".");
+      dappBase = rootHost;
+    }
+    $dappLink.href = `${protocol}//${dappBase}/dapp/?contract=${contractId}`;
+  }
+
   if (isSigningMode) {
     initSigningMode();
   } else {
