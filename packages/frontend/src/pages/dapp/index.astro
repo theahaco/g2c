@@ -182,7 +182,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       return;
     }
 
-    const callbackUrl = `${window.location.origin}${window.location.pathname}?result=1`;
+    const callbackUrl = `${window.location.origin}${window.location.pathname}?result=1&contract=${contractId}`;
     const dappHost = window.location.hostname;
     let accountBase: string;
     if (dappHost === "localhost" || dappHost === "127.0.0.1") {
