@@ -15,9 +15,12 @@ const DEFAULT_EXPIRATION_OFFSET = 100;
 export function buildAuthHash(authEntry, networkPassphrase, lastLedger, expirationLedgerOffset = DEFAULT_EXPIRATION_OFFSET) {
     const creds = authEntry.credentials().address();
     const expirationLedger = lastLedger + expirationLedgerOffset;
+    // Convert nonce to BigInt to avoid cross-package instanceof issues
+    // when the auth entry originates from a different stellar-sdk copy
+    const nonce = xdr.Int64.fromString(creds.nonce().toString());
     let entry = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(new xdr.HashIdPreimageSorobanAuthorization({
         networkId: hash(Buffer.from(networkPassphrase, "utf-8")),
-        nonce: creds.nonce(),
+        nonce,
         signatureExpirationLedger: expirationLedger,
         invocation: authEntry.rootInvocation(),
     }));

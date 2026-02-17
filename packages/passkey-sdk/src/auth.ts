@@ -81,7 +81,7 @@ export function injectPasskeySignature(
   transaction: { operations: readonly Operation[] },
   passkeySignature: PasskeySignature,
   lastLedger: number,
-  expirationLedgerOffset: number = DEFAULT_EXPIRATION_OFFSET
+  expirationLedgerOffset: number = DEFAULT_EXPIRATION_OFFSET,
 ): void {
   const op = transaction.operations[0] as Operation.InvokeHostFunction;
   const creds = op.auth?.[0]?.credentials().address();
@@ -95,7 +95,9 @@ export function injectPasskeySignature(
     xdr.ScVal.scvMap([
       new xdr.ScMapEntry({
         key: xdr.ScVal.scvSymbol("authenticator_data"),
-        val: xdr.ScVal.scvBytes(Buffer.from(passkeySignature.authenticatorData)),
+        val: xdr.ScVal.scvBytes(
+          Buffer.from(passkeySignature.authenticatorData),
+        ),
       }),
       new xdr.ScMapEntry({
         key: xdr.ScVal.scvSymbol("client_data_json"),
@@ -105,6 +107,6 @@ export function injectPasskeySignature(
         key: xdr.ScVal.scvSymbol("signature"),
         val: xdr.ScVal.scvBytes(Buffer.from(passkeySignature.signature)),
       }),
-    ])
+    ]),
   );
 }
