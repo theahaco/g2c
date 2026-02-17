@@ -75,10 +75,9 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
     <section id="dapp-section">
       <h2>Try dApp</h2>
-      <p class="info">Test a signature request flow with the demo dApp.</p>
+      <p class="info">Set a status message on-chain via your smart account.</p>
       <div class="field">
-        <a id="dapp-link" class="button-link">Open Demo dApp</a>
-        <a id="status-message-link" class="button-link" style="margin-left:0.5rem">Status Message</a>
+        <a id="status-message-link" class="button-link">Status Message</a>
       </div>
     </section>
 
@@ -546,11 +545,9 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
   updateStatusBar();
 
-  // Set dApp links
+  // Set dApp link
   if (contractId) {
     const rootHost = stripSubdomain(window.location.host);
-    const $dappLink = document.getElementById("dapp-link") as HTMLAnchorElement;
-    $dappLink.href = `//${rootHost}/dapp/?contract=${contractId}`;
     const $statusMessageLink = document.getElementById("status-message-link") as HTMLAnchorElement;
     $statusMessageLink.href = `//${rootHost}/status-message/?contract=${contractId}`;
   }
