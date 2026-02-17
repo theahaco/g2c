@@ -108,7 +108,8 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 </style>
 
 <script>
-  import { buf2hex } from "../../lib/encoding";
+  import { buf2hex, accountUrl } from "@g2c/passkey-sdk";
+  import { formatSignResult } from "../../lib/formatting";
 
   const $contractInput = document.getElementById("contract-input") as HTMLInputElement;
   const $txSource = document.getElementById("tx-source")!;
@@ -118,33 +119,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   const $resultSection = document.getElementById("result-section")!;
 
   let currentHash: string | null = null;
-
-  function formatSignResult(result: {
-    authenticatorData: string;
-    clientDataJSON: string;
-    signature: string;
-    publicKey: string;
-  }) {
-    let clientDataReadable = "";
-    try {
-      const bytes = new Uint8Array(
-        result.clientDataJSON.match(/.{2}/g)!.map((b) => parseInt(b, 16))
-      );
-      const decoded = new TextDecoder().decode(bytes);
-      const parsed = JSON.parse(decoded);
-      clientDataReadable = JSON.stringify(parsed, null, 2);
-    } catch {
-      clientDataReadable = "(failed to decode)";
-    }
-
-    return (
-      `<div style="margin-bottom:0.75rem"><strong>Authenticator Data</strong><br><code>${result.authenticatorData}</code></div>` +
-      `<div style="margin-bottom:0.75rem"><strong>Client Data (readable)</strong><pre style="margin-top:0.25rem">${clientDataReadable}</pre></div>` +
-      `<div style="margin-bottom:0.75rem"><strong>Client Data (hex)</strong><br><code>${result.clientDataJSON}</code></div>` +
-      `<div style="margin-bottom:0.75rem"><strong>Signature</strong><br><code>${result.signature}</code></div>` +
-      `<div><strong>Public Key</strong><br><code>${result.publicKey}</code></div>`
-    );
-  }
 
   // Pre-populate from URL param
   const urlParams = new URLSearchParams(window.location.search);
@@ -183,16 +157,8 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     }
 
     const callbackUrl = `${window.location.origin}${window.location.pathname}?result=1&contract=${contractId}`;
-    const dappHost = window.location.hostname;
-    let accountBase: string;
-    if (dappHost === "localhost" || dappHost === "127.0.0.1") {
-      accountBase = `${contractId.toLowerCase()}.localhost:3000`;
-    } else {
-      accountBase = `${contractId.toLowerCase()}.${dappHost}`;
-    }
-    const protocol = window.location.protocol;
-    const accountUrl = `${protocol}//${accountBase}/account/?sign=${currentHash}&callback=${encodeURIComponent(callbackUrl)}`;
-    window.location.href = accountUrl;
+    const signUrl = accountUrl(window.location.host, contractId, `/account/?sign=${currentHash}&callback=${encodeURIComponent(callbackUrl)}`);
+    window.location.href = signUrl;
   });
 
   // Check for returned signature

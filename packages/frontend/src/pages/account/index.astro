@@ -217,16 +217,24 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 </style>
 
 <script>
-  import { extractPublicKey, derToCompact } from "@g2c/passkey-sdk";
-  import { buf2hex, hex2buf, buf2base64url, base64url2buf } from "../../lib/encoding";
+  import {
+    extractPublicKey,
+    derToCompact,
+    buf2hex,
+    hex2buf,
+    buf2base64url,
+    contractIdFromHostname,
+    stripSubdomain,
+    saveCredential as sdkSaveCredential,
+    loadCredential as sdkLoadCredential,
+  } from "@g2c/passkey-sdk";
+  import { formatSignResult } from "../../lib/formatting";
 
   // --- State ---
 
   const hostname = window.location.hostname;
-  const parts = hostname.split(".");
-  const contractId = parts.length > 1 ? parts[0].toUpperCase() : null;
+  const contractId = contractIdFromHostname(hostname);
   const rpId = hostname;
-  const storagePrefix = `passkey:${contractId}:`;
 
   const params = new URLSearchParams(window.location.search);
   const signHashParam = params.get("sign");
@@ -234,15 +242,11 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   const isSigningMode = signHashParam && callbackUrl;
 
   function saveCredential(credentialId: Uint8Array, publicKey: Uint8Array) {
-    localStorage.setItem(storagePrefix + "credentialId", buf2base64url(credentialId));
-    localStorage.setItem(storagePrefix + "publicKey", buf2hex(publicKey));
+    sdkSaveCredential(contractId!, credentialId, publicKey);
   }
 
   function loadCredential() {
-    const credId = localStorage.getItem(storagePrefix + "credentialId");
-    const pubKey = localStorage.getItem(storagePrefix + "publicKey");
-    if (credId && pubKey) return { credentialId: base64url2buf(credId), publicKey: pubKey };
-    return null;
+    return contractId ? sdkLoadCredential(contractId) : null;
   }
 
   // --- Shared: register passkey ---
@@ -314,35 +318,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       signature: buf2hex(signatureCompact),
       publicKey: cred.publicKey,
     };
-  }
-
-  // --- Format sign result ---
-
-  function formatSignResult(result: {
-    authenticatorData: string;
-    clientDataJSON: string;
-    signature: string;
-    publicKey: string;
-  }) {
-    let clientDataReadable = "";
-    try {
-      const bytes = new Uint8Array(
-        result.clientDataJSON.match(/.{2}/g)!.map((b) => parseInt(b, 16))
-      );
-      const decoded = new TextDecoder().decode(bytes);
-      const parsed = JSON.parse(decoded);
-      clientDataReadable = JSON.stringify(parsed, null, 2);
-    } catch {
-      clientDataReadable = "(failed to decode)";
-    }
-
-    return (
-      `<div style="margin-bottom:0.75rem"><strong>Authenticator Data</strong><br><code>${result.authenticatorData}</code></div>` +
-      `<div style="margin-bottom:0.75rem"><strong>Client Data (readable)</strong><pre style="margin-top:0.25rem">${clientDataReadable}</pre></div>` +
-      `<div style="margin-bottom:0.75rem"><strong>Client Data (hex)</strong><br><code>${result.clientDataJSON}</code></div>` +
-      `<div style="margin-bottom:0.75rem"><strong>Signature</strong><br><code>${result.signature}</code></div>` +
-      `<div><strong>Public Key</strong><br><code>${result.publicKey}</code></div>`
-    );
   }
 
   // --- UI helpers ---
