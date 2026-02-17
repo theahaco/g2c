@@ -78,6 +78,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       <p class="info">Test a signature request flow with the demo dApp.</p>
       <div class="field">
         <a id="dapp-link" class="button-link">Open Demo dApp</a>
+        <a id="status-message-link" class="button-link" style="margin-left:0.5rem">Status Message</a>
       </div>
     </section>
 
@@ -545,11 +546,13 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
   updateStatusBar();
 
-  // Set dApp link
+  // Set dApp links
   if (contractId) {
-    const $dappLink = document.getElementById("dapp-link") as HTMLAnchorElement;
     const rootHost = stripSubdomain(window.location.host);
+    const $dappLink = document.getElementById("dapp-link") as HTMLAnchorElement;
     $dappLink.href = `//${rootHost}/dapp/?contract=${contractId}`;
+    const $statusMessageLink = document.getElementById("status-message-link") as HTMLAnchorElement;
+    $statusMessageLink.href = `//${rootHost}/status-message/?contract=${contractId}`;
   }
 
   if (isSigningMode) {
