@@ -19,28 +19,30 @@ export function buildAuthHash(
   authEntry: xdr.SorobanAuthorizationEntry,
   networkPassphrase: string,
   lastLedger: number,
-  expirationLedgerOffset: number = DEFAULT_EXPIRATION_OFFSET
+  expirationLedgerOffset: number = DEFAULT_EXPIRATION_OFFSET,
 ): Buffer {
   const creds = authEntry.credentials().address();
   const expirationLedger = lastLedger + expirationLedgerOffset;
+  // Convert nonce to BigInt to avoid cross-package instanceof issues
+  // when the auth entry originates from a different stellar-sdk copy
+  const nonce = xdr.Int64.fromString(creds.nonce().toString());
 
-  return hash(
-    xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
-      new xdr.HashIdPreimageSorobanAuthorization({
-        networkId: hash(Buffer.from(networkPassphrase, "utf-8")),
-        nonce: creds.nonce(),
-        signatureExpirationLedger: expirationLedger,
-        invocation: authEntry.rootInvocation(),
-      })
-    ).toXDR()
+  let entry = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
+    new xdr.HashIdPreimageSorobanAuthorization({
+      networkId: hash(Buffer.from(networkPassphrase, "utf-8")),
+      nonce,
+      signatureExpirationLedger: expirationLedger,
+      invocation: authEntry.rootInvocation(),
+    }),
   );
+  return hash(entry.toXDR());
 }
 
 /**
  * Extract the first Soroban auth entry from a simulation result.
  */
 export function getAuthEntry(
-  simulation: rpc.Api.SimulateTransactionSuccessResponse
+  simulation: rpc.Api.SimulateTransactionSuccessResponse,
 ): xdr.SorobanAuthorizationEntry {
   const auth = simulation.result?.auth;
   if (!auth || auth.length === 0) {
@@ -69,17 +71,22 @@ export function parseAssertionResponse(assertionResponse: {
 /**
  * Inject a passkey signature into a transaction's Soroban auth credentials.
  *
- * Modifies the transaction's first auth entry in-place, setting the signature
- * expiration ledger and the passkey signature map (authenticator_data, client_data_json, signature).
+ * Constructs the OZ smart account `Signatures(Map<Signer, Bytes>)` format:
+ * - Key: `Signer::External(verifier_address, public_key)`
+ * - Value: XDR-encoded `WebAuthnSigData { authenticator_data, client_data, signature }`
  *
  * @param transaction - The assembled transaction from simulation
  * @param passkeySignature - Parsed passkey signature components
+ * @param verifierAddress - Address of the WebAuthn verifier contract
+ * @param publicKey - 65-byte uncompressed P-256 public key
  * @param lastLedger - Current ledger sequence number
  * @param expirationLedgerOffset - How many ledgers the signature is valid for (default 100)
  */
 export function injectPasskeySignature(
   transaction: { operations: readonly Operation[] },
   passkeySignature: PasskeySignature,
+  verifierAddress: string,
+  publicKey: Uint8Array,
   lastLedger: number,
   expirationLedgerOffset: number = DEFAULT_EXPIRATION_OFFSET,
 ): void {
