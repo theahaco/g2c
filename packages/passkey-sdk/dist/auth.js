@@ -1,7 +1,7 @@
 import { hash, xdr, Address } from "@stellar/stellar-sdk";
 import { derToCompact } from "./signature.js";
 /** Default ledger offset for signature expiration. */
-const DEFAULT_EXPIRATION_OFFSET = 100;
+const DEFAULT_EXPIRATION_OFFSET = 10000;
 /**
  * Compute the authorization hash for a Soroban auth entry.
  *

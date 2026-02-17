@@ -3,7 +3,7 @@ import { derToCompact } from "./signature.js";
 import type { PasskeySignature } from "./types.js";
 
 /** Default ledger offset for signature expiration. */
-const DEFAULT_EXPIRATION_OFFSET = 100;
+const DEFAULT_EXPIRATION_OFFSET = 10000;
 
 /**
  * Compute the authorization hash for a Soroban auth entry.
@@ -96,9 +96,7 @@ export function injectPasskeySignature(
   const sigDataScVal = xdr.ScVal.scvMap([
     new xdr.ScMapEntry({
       key: xdr.ScVal.scvSymbol("authenticator_data"),
-      val: xdr.ScVal.scvBytes(
-        Buffer.from(passkeySignature.authenticatorData),
-      ),
+      val: xdr.ScVal.scvBytes(Buffer.from(passkeySignature.authenticatorData)),
     }),
     new xdr.ScMapEntry({
       key: xdr.ScVal.scvSymbol("client_data"),

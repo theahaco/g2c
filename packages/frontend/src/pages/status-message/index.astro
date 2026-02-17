@@ -38,11 +38,10 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
   <!-- Result (shown after redirect back) -->
   <section id="result-section" class="hidden">
-    <h2>Signed Transaction</h2>
-    <p class="info">Copy this XDR and submit it to the network.</p>
-    <pre id="xdr-display"></pre>
-    <div class="field">
-      <button id="copy-btn">Copy XDR</button>
+    <h2>Result</h2>
+    <div id="submit-status" class="message-display">
+      <div class="label">Status</div>
+      <div class="value" id="status-value">Submitting transaction...</div>
     </div>
   </section>
 </BaseLayout>
@@ -117,8 +116,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   const $messageInput = document.getElementById("message-input") as HTMLInputElement;
   const $setBtn = document.getElementById("set-btn") as HTMLButtonElement;
   const $resultSection = document.getElementById("result-section")!;
-  const $xdrDisplay = document.getElementById("xdr-display")!;
-  const $copyBtn = document.getElementById("copy-btn") as HTMLButtonElement;
+  const $statusValue = document.getElementById("status-value")!;
 
   // --- UI helpers ---
 
@@ -305,32 +303,37 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
           // Sign envelope with source keypair
           finalTx.sign(keypair);
 
-          // Display the fully signed transaction XDR
+          // Submit to the network
           $resultSection.classList.remove("hidden");
-          $xdrDisplay.textContent = finalTx.toXDR();
+          $statusValue.textContent = "Submitting transaction...";
+          const sendResult = await server.sendTransaction(finalTx);
+
+          if (sendResult.status === "ERROR") {
+            throw new Error(`Transaction rejected: ${sendResult.errorResult?.toXDR("base64") ?? "unknown"}`);
+          }
+
+          // Poll for confirmation
+          $statusValue.textContent = "Waiting for confirmation...";
+          let getResult = await server.getTransaction(sendResult.hash);
+          while (getResult.status === "NOT_FOUND") {
+            await new Promise((r) => setTimeout(r, 1500));
+            getResult = await server.getTransaction(sendResult.hash);
+          }
+
+          if (getResult.status === "SUCCESS") {
+            $statusValue.textContent = "Message updated successfully!";
+          } else {
+            throw new Error(`Transaction failed: ${getResult.status}`);
+          }
 
           // Clean up stored transaction data
           localStorage.removeItem("sm:txXdr");
           localStorage.removeItem("sm:lastLedger");
           localStorage.removeItem("sm:contract");
         } catch (err: any) {
-          showError(`Failed to assemble signed transaction: ${err.message}`);
+          showError(`Failed: ${err.message}`);
         }
       })();
     }
   }
-
-  // --- Copy button ---
-
-  $copyBtn.addEventListener("click", () => {
-    const xdr = $xdrDisplay.textContent;
-    if (xdr) {
-      navigator.clipboard.writeText(xdr).then(() => {
-        $copyBtn.textContent = "Copied!";
-        setTimeout(() => {
-          $copyBtn.textContent = "Copy XDR";
-        }, 2000);
-      });
-    }
-  });
 </script>
