@@ -1,4 +1,5 @@
 import type { PasskeyRegistration } from "./types.js";
+import { base64url2buf, buf2base64url } from "./encoding.js";
 
 // Minimal WebAuthn type declarations so this module compiles without DOM lib.
 // At runtime, these are the browser-native types.
@@ -42,7 +43,7 @@ export function extractPublicKey(
  * authData within the attestation object.
  */
 export function parseAttestationObject(attestationObjectB64u: string): Uint8Array {
-  const raw = base64urlToBuffer(attestationObjectB64u);
+  const raw = base64url2buf(attestationObjectB64u);
   const authData = extractAuthDataFromCbor(raw);
   return extractPublicKeyFromAuthData(authData);
 }
@@ -62,30 +63,13 @@ export function parseRegistration(
     publicKey = extractPublicKey(credential.response);
   } catch {
     // Fallback: parse attestationObject CBOR (mobile/Capacitor)
-    const attestationB64u = bufferToBase64url(
+    const attestationB64u = buf2base64url(
       new Uint8Array(credential.response.attestationObject)
     );
     publicKey = parseAttestationObject(attestationB64u);
   }
 
   return { publicKey, credentialId };
-}
-
-// --- base64url helpers (no dependencies) ---
-
-function base64urlToBuffer(str: string): Uint8Array {
-  let b64 = str.replace(/-/g, "+").replace(/_/g, "/");
-  while (b64.length % 4) b64 += "=";
-  const binary = atob(b64);
-  const bytes = new Uint8Array(binary.length);
-  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
-  return bytes;
-}
-
-function bufferToBase64url(buf: Uint8Array): string {
-  let binary = "";
-  for (const b of buf) binary += String.fromCharCode(b);
-  return btoa(binary).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
 // --- Minimal CBOR parsing for attestationObject ---

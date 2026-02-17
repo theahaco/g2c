@@ -30,6 +30,12 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       <a id="create-link" class="button-link">Create Account</a>
     </div>
   </section>
+
+  <section id="accounts-section" class="hidden">
+    <h2>Your Accounts</h2>
+    <p class="info">Previously created smart accounts.</p>
+    <ul id="accounts-list"></ul>
+  </section>
 </BaseLayout>
 
 <style>
@@ -52,11 +58,33 @@ import BaseLayout from "../layouts/BaseLayout.astro";
   .button-link:hover {
     background: #1a8b4a;
   }
+
+  #accounts-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0;
+  }
+
+  #accounts-list li {
+    margin: 0.4rem 0;
+  }
+
+  #accounts-list a {
+    color: #5bc0de;
+    text-decoration: underline;
+    font-family: monospace;
+    font-size: 0.85rem;
+  }
+
+  #accounts-list a:hover {
+    color: #7dd4ed;
+  }
 </style>
 
 <script>
   import { Keypair, Networks } from "@stellar/stellar-sdk";
   import { Client } from "factory";
+  import { accountUrl, loadAccounts } from "@g2c/passkey-sdk";
 
   const FACTORY_CONTRACT_ID = "CC3UFW4NBS64DGOBCWZEQ5NZGYIKJUGOLFLW7H3RPEBKR5RKBYRL4W67";
   const RPC_URL = "https://soroban-testnet.stellar.org";
@@ -77,6 +105,23 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 
   function clearError() {
     $errorBox.style.display = "none";
+  }
+
+  // Show previously created accounts
+  const savedAccounts = loadAccounts();
+  if (savedAccounts.length > 0) {
+    const $accountsSection = document.getElementById("accounts-section")!;
+    const $accountsList = document.getElementById("accounts-list")!;
+    $accountsSection.classList.remove("hidden");
+
+    for (const cAddress of savedAccounts) {
+      const li = document.createElement("li");
+      const a = document.createElement("a");
+      a.href = accountUrl(window.location.host, cAddress, "/account/");
+      a.textContent = cAddress;
+      li.appendChild(a);
+      $accountsList.appendChild(li);
+    }
   }
 
   $generateBtn.addEventListener("click", async () => {
@@ -115,19 +160,10 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       $cAddressResult.textContent = cAddress;
 
       // Build navigation link
-      const host = window.location.hostname;
-      const protocol = window.location.protocol;
-      let accountBase: string;
-      if (host === "localhost" || host === "127.0.0.1") {
-        accountBase = `${cAddress}.localhost:${window.location.port || "3000"}`;
-      } else {
-        accountBase = `${cAddress}.${host}`;
-      }
-      const newAccountUrl = `${protocol}//${accountBase}/new-account/?key=${secret}`;
+      const newAccountHref = accountUrl(window.location.host, cAddress, `/new-account/?key=${secret}`);
 
       $navSection.classList.remove("hidden");
-      $createLink.href = newAccountUrl;
-      console.log($createLink);
+      $createLink.href = newAccountHref;
       $generateBtn.textContent = "Generate & Fund";
       $generateBtn.disabled = false;
     } catch (err: any) {

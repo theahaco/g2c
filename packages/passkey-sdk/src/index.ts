@@ -25,3 +25,23 @@ export {
   lookupExistingAccount,
   deploySmartAccount,
 } from "./deploy.js";
+
+export {
+  buf2hex,
+  hex2buf,
+  buf2base64url,
+  base64url2buf,
+} from "./encoding.js";
+
+export {
+  contractIdFromHostname,
+  accountUrl,
+  stripSubdomain,
+} from "./url.js";
+
+export {
+  saveCredential,
+  loadCredential,
+  saveAccount,
+  loadAccounts,
+} from "./storage.js";

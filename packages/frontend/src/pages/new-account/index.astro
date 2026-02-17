@@ -78,13 +78,28 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   .button-link:hover {
     background: #1a8b4a;
   }
+
+  #deploy-result a {
+    color: #5bc0de;
+    text-decoration: underline;
+  }
+
+  #deploy-result a:hover {
+    color: #7dd4ed;
+  }
 </style>
 
 <script>
   import { Keypair, Networks, TransactionBuilder, Operation, Address, Account, rpc, xdr } from "@stellar/stellar-sdk";
   import { Buffer } from "buffer";
-  import { extractPublicKey } from "@g2c/passkey-sdk";
-  import { buf2hex, buf2base64url } from "../../lib/encoding";
+  import {
+    extractPublicKey,
+    buf2hex,
+    buf2base64url,
+    contractIdFromHostname,
+    saveCredential as sdkSaveCredential,
+    saveAccount,
+  } from "@g2c/passkey-sdk";
 
   const FACTORY_CONTRACT_ID = "CC3UFW4NBS64DGOBCWZEQ5NZGYIKJUGOLFLW7H3RPEBKR5RKBYRL4W67";
   const RPC_URL = "https://soroban-testnet.stellar.org";
@@ -92,8 +107,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   // --- State ---
 
   const hostname = window.location.hostname;
-  const parts = hostname.split(".");
-  const contractId = parts.length > 1 ? parts[0].toUpperCase() : null;
+  const contractId = contractIdFromHostname(hostname);
   const rpId = hostname;
 
   const params = new URLSearchParams(window.location.search);
@@ -178,10 +192,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       passkeyPublicKey = extractPublicKey(response);
       credentialIdBytes = new Uint8Array(credential.rawId);
 
-      // Save to localStorage (same format as account page)
-      const storagePrefix = `passkey:${contractId}:`;
-      localStorage.setItem(storagePrefix + "credentialId", buf2base64url(credentialIdBytes));
-      localStorage.setItem(storagePrefix + "publicKey", buf2hex(passkeyPublicKey));
+      sdkSaveCredential(contractId!, credentialIdBytes, passkeyPublicKey);
 
       $registerResult.style.display = "block";
       $registerResult.textContent = JSON.stringify(
@@ -264,8 +275,10 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
         throw new Error(`Transaction failed: ${getResponse.status}`);
       }
 
+      saveAccount(contractId!);
+
       $deployResult.style.display = "block";
-      $deployResult.textContent = `Account deployed!\nC-address: ${contractId}`;
+      $deployResult.innerHTML = `Account deployed!\nC-address: <a href="https://stellar.expert/explorer/testnet/contract/${contractId}" target="_blank" rel="noopener">${contractId}</a>`;
 
       // Show link to account page
       const protocol = window.location.protocol;

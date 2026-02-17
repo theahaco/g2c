@@ -5,7 +5,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 <BaseLayout title="Soroban Passkey Account">
   <h1>Soroban Passkey</h1>
   <div id="status-bar">
-    <div>Contract: <code id="contract-id"></code></div>
+    <div>Contract: <code id="contract-id"></code> <a id="explorer-link" class="explorer-link" target="_blank" rel="noopener" style="display:none">View on Stellar Expert</a></div>
     <div>RP ID: <code id="rp-id"></code></div>
     <div>Stored key: <code id="stored-key">none</code></div>
   </div>
@@ -71,6 +71,14 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
         <button id="register-btn">Register Passkey</button>
       </div>
       <pre id="no-key-register-result" style="display:none"></pre>
+    </section>
+
+    <section id="dapp-section">
+      <h2>Try dApp</h2>
+      <p class="info">Test a signature request flow with the demo dApp.</p>
+      <div class="field">
+        <a id="dapp-link" class="button-link">Open Demo dApp</a>
+      </div>
     </section>
 
     <section id="sign-section">
@@ -179,19 +187,54 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   .reregister-summary:hover {
     color: #c0d0e0;
   }
+
+  .explorer-link {
+    color: #5bc0de;
+    text-decoration: underline;
+    font-size: 0.8rem;
+    margin-left: 0.5rem;
+  }
+
+  .explorer-link:hover {
+    color: #7dd4ed;
+  }
+
+  .button-link {
+    display: inline-block;
+    background: #4a1a6b;
+    color: #e0e0e0;
+    border: 1px solid #6a2a8b;
+    padding: 0.5rem 1.2rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.95rem;
+    text-decoration: none;
+  }
+
+  .button-link:hover {
+    background: #5a2a7b;
+  }
 </style>
 
 <script>
-  import { extractPublicKey, derToCompact } from "@g2c/passkey-sdk";
-  import { buf2hex, hex2buf, buf2base64url, base64url2buf } from "../../lib/encoding";
+  import {
+    extractPublicKey,
+    derToCompact,
+    buf2hex,
+    hex2buf,
+    buf2base64url,
+    contractIdFromHostname,
+    stripSubdomain,
+    saveCredential as sdkSaveCredential,
+    loadCredential as sdkLoadCredential,
+  } from "@g2c/passkey-sdk";
+  import { formatSignResult } from "../../lib/formatting";
 
   // --- State ---
 
   const hostname = window.location.hostname;
-  const parts = hostname.split(".");
-  const contractId = parts.length > 1 ? parts[0].toUpperCase() : null;
+  const contractId = contractIdFromHostname(hostname);
   const rpId = hostname;
-  const storagePrefix = `passkey:${contractId}:`;
 
   const params = new URLSearchParams(window.location.search);
   const signHashParam = params.get("sign");
@@ -199,15 +242,11 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   const isSigningMode = signHashParam && callbackUrl;
 
   function saveCredential(credentialId: Uint8Array, publicKey: Uint8Array) {
-    localStorage.setItem(storagePrefix + "credentialId", buf2base64url(credentialId));
-    localStorage.setItem(storagePrefix + "publicKey", buf2hex(publicKey));
+    sdkSaveCredential(contractId!, credentialId, publicKey);
   }
 
   function loadCredential() {
-    const credId = localStorage.getItem(storagePrefix + "credentialId");
-    const pubKey = localStorage.getItem(storagePrefix + "publicKey");
-    if (credId && pubKey) return { credentialId: base64url2buf(credId), publicKey: pubKey };
-    return null;
+    return contractId ? sdkLoadCredential(contractId) : null;
   }
 
   // --- Shared: register passkey ---
@@ -281,35 +320,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     };
   }
 
-  // --- Format sign result ---
-
-  function formatSignResult(result: {
-    authenticatorData: string;
-    clientDataJSON: string;
-    signature: string;
-    publicKey: string;
-  }) {
-    let clientDataReadable = "";
-    try {
-      const bytes = new Uint8Array(
-        result.clientDataJSON.match(/.{2}/g)!.map((b) => parseInt(b, 16))
-      );
-      const decoded = new TextDecoder().decode(bytes);
-      const parsed = JSON.parse(decoded);
-      clientDataReadable = JSON.stringify(parsed, null, 2);
-    } catch {
-      clientDataReadable = "(failed to decode)";
-    }
-
-    return (
-      `<div style="margin-bottom:0.75rem"><strong>Authenticator Data</strong><br><code>${result.authenticatorData}</code></div>` +
-      `<div style="margin-bottom:0.75rem"><strong>Client Data (readable)</strong><pre style="margin-top:0.25rem">${clientDataReadable}</pre></div>` +
-      `<div style="margin-bottom:0.75rem"><strong>Client Data (hex)</strong><br><code>${result.clientDataJSON}</code></div>` +
-      `<div style="margin-bottom:0.75rem"><strong>Signature</strong><br><code>${result.signature}</code></div>` +
-      `<div><strong>Public Key</strong><br><code>${result.publicKey}</code></div>`
-    );
-  }
-
   // --- UI helpers ---
 
   function showError(msg: string) {
@@ -326,6 +336,12 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     document.getElementById("contract-id")!.textContent =
       contractId || "(visit via <contractId>.<domain>)";
     document.getElementById("rp-id")!.textContent = rpId;
+
+    const $explorerLink = document.getElementById("explorer-link") as HTMLAnchorElement;
+    if (contractId) {
+      $explorerLink.href = `https://stellar.expert/explorer/testnet/contract/${contractId}`;
+      $explorerLink.style.display = "inline";
+    }
 
     const cred = loadCredential();
     document.getElementById("stored-key")!.textContent = cred ? cred.publicKey : "none";
@@ -528,6 +544,14 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   // --- Init ---
 
   updateStatusBar();
+
+  // Set dApp link
+  if (contractId) {
+    const $dappLink = document.getElementById("dapp-link") as HTMLAnchorElement;
+    const rootHost = stripSubdomain(window.location.host);
+    $dappLink.href = `//${rootHost}/dapp/?contract=${contractId}`;
+  }
+
   if (isSigningMode) {
     initSigningMode();
   } else {
