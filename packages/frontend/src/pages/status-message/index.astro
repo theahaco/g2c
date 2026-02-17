@@ -250,46 +250,61 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     if (params.get("error")) {
       showError("Signature request was denied.");
     } else if (authenticatorData && clientDataJSON && signature) {
-      try {
-        const txXdr = localStorage.getItem("sm:txXdr");
-        const lastLedgerStr = localStorage.getItem("sm:lastLedger");
-        const keypairSecret = localStorage.getItem("sm:keypairSecret");
+      (async () => {
+        try {
+          const txXdr = localStorage.getItem("sm:txXdr");
+          const lastLedgerStr = localStorage.getItem("sm:lastLedger");
+          const keypairSecret = localStorage.getItem("sm:keypairSecret");
 
-        if (!txXdr || !lastLedgerStr || !keypairSecret) {
-          throw new Error("Missing stored transaction data. Please try again.");
+          if (!txXdr || !lastLedgerStr || !keypairSecret) {
+            throw new Error("Missing stored transaction data. Please try again.");
+          }
+
+          const lastLedger = parseInt(lastLedgerStr, 10);
+          const keypair = Keypair.fromSecret(keypairSecret);
+
+          // Reconstruct transaction from stored XDR
+          const authTxn = TransactionBuilder.fromXDR(txXdr, Networks.TESTNET) as Transaction;
+
+          // Inject passkey signature into auth entry
+          injectPasskeySignature(
+            authTxn,
+            {
+              authenticatorData: hex2buf(authenticatorData),
+              clientDataJson: hex2buf(clientDataJSON),
+              signature: hex2buf(signature),
+            },
+            lastLedger
+          );
+
+          // Re-simulate with real signature for accurate resource estimates
+          const server = new rpc.Server(RPC_URL);
+          const sim = await server.simulateTransaction(authTxn);
+
+          if (rpc.Api.isSimulationError(sim) || rpc.Api.isSimulationRestore(sim)) {
+            throw new Error(`Re-simulation failed: ${"error" in sim ? sim.error : "restore needed"}`);
+          }
+
+          // Re-assemble with updated resources/fees
+          const finalTx = rpc.assembleTransaction(authTxn, sim)
+            .setTimeout(0)
+            .build();
+
+          // Sign envelope with source keypair
+          finalTx.sign(keypair);
+
+          // Display the fully signed transaction XDR
+          $resultSection.classList.remove("hidden");
+          $xdrDisplay.textContent = finalTx.toXDR();
+
+          // Clean up stored transaction data
+          localStorage.removeItem("sm:txXdr");
+          localStorage.removeItem("sm:lastLedger");
+          localStorage.removeItem("sm:contract");
+        } catch (err: any) {
+          showError(`Failed to assemble signed transaction: ${err.message}`);
         }
-
-        const lastLedger = parseInt(lastLedgerStr, 10);
-        const keypair = Keypair.fromSecret(keypairSecret);
-
-        // Reconstruct transaction from stored XDR
-        const tx = TransactionBuilder.fromXDR(txXdr, Networks.TESTNET) as Transaction;
-
-        // Inject passkey signature into auth entry
-        injectPasskeySignature(
-          tx,
-          {
-            authenticatorData: hex2buf(authenticatorData),
-            clientDataJson: hex2buf(clientDataJSON),
-            signature: hex2buf(signature),
-          },
-          lastLedger
-        );
-
-        // Sign envelope with source keypair
-        tx.sign(keypair);
-
-        // Display the fully signed transaction XDR
-        $resultSection.classList.remove("hidden");
-        $xdrDisplay.textContent = tx.toXDR();
-
-        // Clean up stored transaction data
-        localStorage.removeItem("sm:txXdr");
-        localStorage.removeItem("sm:lastLedger");
-        localStorage.removeItem("sm:contract");
-      } catch (err: any) {
-        showError(`Failed to assemble signed transaction: ${err.message}`);
-      }
+      })();
     }
   }
 
