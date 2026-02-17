@@ -300,9 +300,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
           }
 
           // Re-assemble with updated resources/fees
-          const finalTx = rpc.assembleTransaction(authTxn, sim)
-            .setTimeout(0)
-            .build();
+          const finalTx = rpc.assembleTransaction(authTxn, sim).build();
 
           // Sign envelope with source keypair
           finalTx.sign(keypair);
