@@ -42,6 +42,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     <div id="submit-status" class="message-display">
       <div class="label">Status</div>
       <div class="value" id="status-value">Submitting transaction...</div>
+      <a id="tx-link" href="#" target="_blank" rel="noopener" style="display:none">View on Stellar Expert</a>
     </div>
   </section>
 </BaseLayout>
@@ -77,6 +78,13 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     color: #e0e0e0;
     font-size: 0.95rem;
     margin-top: 0.25rem;
+  }
+
+  .message-display a {
+    color: #7a9ec9;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+    display: inline-block;
   }
 </style>
 
@@ -117,6 +125,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   const $setBtn = document.getElementById("set-btn") as HTMLButtonElement;
   const $resultSection = document.getElementById("result-section")!;
   const $statusValue = document.getElementById("status-value")!;
+  const $txLink = document.getElementById("tx-link") as HTMLAnchorElement;
 
   // --- UI helpers ---
 
@@ -159,6 +168,20 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
   // --- Load message ---
 
+  async function loadMessage(contract: string) {
+    const keypair = await keypairReady;
+    const client = new Client({
+      contractId: STATUS_CONTRACT,
+      networkPassphrase: Networks.TESTNET,
+      rpcUrl: RPC_URL,
+      publicKey: keypair.publicKey(),
+    });
+
+    const tx = await client.get_message({ author: contract });
+    $currentMessage.classList.remove("hidden");
+    $messageValue.textContent = tx.result ?? "No message set";
+  }
+
   $loadBtn.addEventListener("click", async () => {
     clearError();
     const contract = $contractInput.value.trim();
@@ -170,20 +193,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     try {
       $loadBtn.disabled = true;
       $loadBtn.textContent = "Loading...";
-
-      const keypair = await keypairReady;
-      const client = new Client({
-        contractId: STATUS_CONTRACT,
-        networkPassphrase: Networks.TESTNET,
-        rpcUrl: RPC_URL,
-        publicKey: keypair.publicKey(),
-      });
-
-      const tx = await client.get_message({ author: contract });
-      const message = tx.result;
-
-      $currentMessage.classList.remove("hidden");
-      $messageValue.textContent = message ?? "No message set";
+      await loadMessage(contract);
     } catch (err: any) {
       showError(`Failed to load message: ${err.message}`);
     } finally {
@@ -322,6 +332,18 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
           if (getResult.status === "SUCCESS") {
             $statusValue.textContent = "Message updated successfully!";
+            $txLink.href = `https://stellar.expert/explorer/testnet/tx/${sendResult.hash}`;
+            $txLink.style.display = "inline";
+
+            // Reload the current message
+            const contract = $contractInput.value.trim();
+            if (contract) {
+              try {
+                await loadMessage(contract);
+              } catch (_) {
+                // non-critical, ignore
+              }
+            }
           } else {
             throw new Error(`Transaction failed: ${getResult.status}`);
           }
