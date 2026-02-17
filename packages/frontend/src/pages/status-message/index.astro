@@ -82,6 +82,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 </style>
 
 <script>
+  import { Buffer } from "buffer";
   import { Client, networks } from "status-message";
   import {
     buildAuthHash,
@@ -90,12 +91,24 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     hex2buf,
     buf2hex,
     accountUrl,
-buf2base64url,
+    computeAccountAddress,
   } from "@g2c/passkey-sdk";
   import { Keypair, Networks, TransactionBuilder, Transaction, rpc } from "@stellar/stellar-sdk";
 
   const RPC_URL = "https://soroban-testnet.stellar.org";
   const STATUS_CONTRACT = networks.testnet.contractId;
+  const FACTORY_CONTRACT_ID = "CC3UFW4NBS64DGOBCWZEQ5NZGYIKJUGOLFLW7H3RPEBKR5RKBYRL4W67";
+
+  // WebAuthn verifier WASM hash (from factory contract source)
+  const VERIFIER_WASM_HASH = Buffer.from([
+    0x68, 0xe3, 0x4e, 0x48, 0x6c, 0xd9, 0xdf, 0xc9,
+    0xa2, 0x73, 0x8a, 0xef, 0x07, 0x4a, 0xc9, 0xff,
+    0xb1, 0x4f, 0x71, 0x01, 0x02, 0xa2, 0x4e, 0x7c,
+    0x63, 0x81, 0xd7, 0xb1, 0x02, 0xa3, 0x26, 0x93,
+  ]);
+  const VERIFIER_ADDRESS = computeAccountAddress(
+    FACTORY_CONTRACT_ID, VERIFIER_WASM_HASH, Networks.TESTNET
+  );
 
   // --- UI refs ---
 
@@ -219,7 +232,7 @@ buf2base64url,
       const authEntry = getAuthEntry(sim);
       const lastLedger = sim.latestLedger;
       const authHash = buildAuthHash(authEntry, Networks.TESTNET, lastLedger);
-      const authHashBase64 = buf2base64url(authHash);
+      const authHashHex = buf2hex(authHash);
 
       // Store transaction data for after redirect
       localStorage.setItem("sm:txXdr", tx.built!.toXDR());
@@ -231,7 +244,7 @@ buf2base64url,
       const signUrl = accountUrl(
         window.location.host,
         contract,
-        `/account/?sign=${authHashBase64}&callback=${encodeURIComponent(callback)}`
+        `/account/?sign=${authHashHex}&callback=${encodeURIComponent(callback)}`
       );
       window.location.href = signUrl;
     } catch (err: any) {
@@ -247,10 +260,11 @@ buf2base64url,
     const authenticatorData = params.get("authenticatorData");
     const clientDataJSON = params.get("clientDataJSON");
     const signature = params.get("signature");
+    const publicKeyHex = params.get("publicKey");
 
     if (params.get("error")) {
       showError("Signature request was denied.");
-    } else if (authenticatorData && clientDataJSON && signature) {
+    } else if (authenticatorData && clientDataJSON && signature && publicKeyHex) {
       (async () => {
         try {
           const txXdr = localStorage.getItem("sm:txXdr");
@@ -267,7 +281,7 @@ buf2base64url,
           // Reconstruct transaction from stored XDR
           const authTxn = TransactionBuilder.fromXDR(txXdr, Networks.TESTNET) as Transaction;
 
-          // Inject passkey signature into auth entry
+          // Inject passkey signature into auth entry (OZ smart account format)
           injectPasskeySignature(
             authTxn,
             {
@@ -275,6 +289,8 @@ buf2base64url,
               clientDataJson: hex2buf(clientDataJSON),
               signature: hex2buf(signature),
             },
+            VERIFIER_ADDRESS,
+            hex2buf(publicKeyHex),
             lastLedger
           );
 
