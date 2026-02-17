@@ -92,7 +92,9 @@ export function injectPasskeySignature(
 
   creds.signatureExpirationLedger(lastLedger + expirationLedgerOffset);
 
-  // WebAuthnSigData struct (field names must match the contract type)
+  // WebAuthnSigData struct as a native Map ScVal (not XDR-encoded Bytes).
+  // The verifier's WebAuthnSigData::try_from_val expects a MapObject Val,
+  // and authenticate() passes sig_data.into_val(e) directly to the verifier.
   const sigDataScVal = xdr.ScVal.scvMap([
     new xdr.ScMapEntry({
       key: xdr.ScVal.scvSymbol("authenticator_data"),
@@ -110,9 +112,6 @@ export function injectPasskeySignature(
     }),
   ]);
 
-  // XDR-encode WebAuthnSigData to raw bytes
-  const sigDataBytes = sigDataScVal.toXDR();
-
   // Signer::External(verifier_address, public_key) enum variant
   const signerScVal = xdr.ScVal.scvVec([
     xdr.ScVal.scvSymbol("External"),
@@ -120,13 +119,15 @@ export function injectPasskeySignature(
     xdr.ScVal.scvBytes(Buffer.from(publicKey)),
   ]);
 
-  // Signatures tuple struct → Vec([Map<Signer, Bytes>])
+  // Signatures tuple struct → Vec([Map<Signer, Val>])
+  // Despite the Rust type being Map<Signer, Bytes>, the host stores untyped Vals.
+  // Pass sigDataScVal directly so the verifier receives a Map Val it can deserialize.
   creds.signature(
     xdr.ScVal.scvVec([
       xdr.ScVal.scvMap([
         new xdr.ScMapEntry({
           key: signerScVal,
-          val: xdr.ScVal.scvBytes(sigDataBytes),
+          val: sigDataScVal,
         }),
       ]),
     ]),
