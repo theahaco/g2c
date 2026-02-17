@@ -1,4 +1,4 @@
-import { hash, xdr, } from "@stellar/stellar-sdk";
+import { hash, xdr } from "@stellar/stellar-sdk";
 import { derToCompact } from "./signature.js";
 /** Default ledger offset for signature expiration. */
 const DEFAULT_EXPIRATION_OFFSET = 100;
@@ -15,12 +15,13 @@ const DEFAULT_EXPIRATION_OFFSET = 100;
 export function buildAuthHash(authEntry, networkPassphrase, lastLedger, expirationLedgerOffset = DEFAULT_EXPIRATION_OFFSET) {
     const creds = authEntry.credentials().address();
     const expirationLedger = lastLedger + expirationLedgerOffset;
-    return hash(xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(new xdr.HashIdPreimageSorobanAuthorization({
+    let entry = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(new xdr.HashIdPreimageSorobanAuthorization({
         networkId: hash(Buffer.from(networkPassphrase, "utf-8")),
         nonce: creds.nonce(),
         signatureExpirationLedger: expirationLedger,
         invocation: authEntry.rootInvocation(),
-    })).toXDR());
+    }));
+    return hash(entry.toXDR());
 }
 /**
  * Extract the first Soroban auth entry from a simulation result.

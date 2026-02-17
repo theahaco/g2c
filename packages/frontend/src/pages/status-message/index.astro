@@ -90,6 +90,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     hex2buf,
     buf2hex,
     accountUrl,
+buf2base64url,
   } from "@g2c/passkey-sdk";
   import { Keypair, Networks, TransactionBuilder, Transaction, rpc } from "@stellar/stellar-sdk";
 
@@ -211,14 +212,14 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
         publicKey: keypair.publicKey(),
       });
 
-      const tx = await client.udpate_message({ message, author: contract });
+      const tx = await client.udpate_message({ message, author: contract }, { simulate: true } );
       const sim = tx.simulation as rpc.Api.SimulateTransactionSuccessResponse;
 
       // Extract auth entry and compute hash
       const authEntry = getAuthEntry(sim);
       const lastLedger = sim.latestLedger;
       const authHash = buildAuthHash(authEntry, Networks.TESTNET, lastLedger);
-      const authHashHex = buf2hex(authHash);
+      const authHashBase64 = buf2base64url(authHash);
 
       // Store transaction data for after redirect
       localStorage.setItem("sm:txXdr", tx.built!.toXDR());
@@ -230,7 +231,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       const signUrl = accountUrl(
         window.location.host,
         contract,
-        `/account/?sign=${authHashHex}&callback=${encodeURIComponent(callback)}`
+        `/account/?sign=${authHashBase64}&callback=${encodeURIComponent(callback)}`
       );
       window.location.href = signUrl;
     } catch (err: any) {

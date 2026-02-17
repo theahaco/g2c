@@ -1,9 +1,4 @@
-import {
-  hash,
-  xdr,
-  rpc,
-  Operation,
-} from "@stellar/stellar-sdk";
+import { hash, xdr, rpc, Operation } from "@stellar/stellar-sdk";
 import { derToCompact } from "./signature.js";
 import type { PasskeySignature } from "./types.js";
 
