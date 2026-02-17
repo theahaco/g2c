@@ -1,0 +1,364 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="Status Message">
+  <h1>Status Message</h1>
+  <p class="info">Set a status message on-chain via your smart account.</p>
+
+  <div id="error-box" class="error" style="display:none"></div>
+
+  <!-- Read current message -->
+  <section>
+    <h2>1. Read Message</h2>
+    <div class="field">
+      <label for="contract-input">Smart Account C-address</label>
+      <input id="contract-input" placeholder="C..." />
+    </div>
+    <div class="field">
+      <button id="load-btn">Load Message</button>
+    </div>
+    <div id="current-message" class="message-display hidden">
+      <div class="label">Current message</div>
+      <div class="value" id="message-value"></div>
+    </div>
+  </section>
+
+  <!-- Set new message -->
+  <section>
+    <h2>2. Set Message</h2>
+    <div class="field">
+      <label for="message-input">New message</label>
+      <input id="message-input" placeholder="Hello, Soroban!" />
+    </div>
+    <div class="field">
+      <button id="set-btn" class="primary">Set Message</button>
+    </div>
+  </section>
+
+  <!-- Result (shown after redirect back) -->
+  <section id="result-section" class="hidden">
+    <h2>Result</h2>
+    <div id="submit-status" class="message-display">
+      <div class="label">Status</div>
+      <div class="value" id="status-value">Submitting transaction...</div>
+      <a id="tx-link" href="#" target="_blank" rel="noopener" style="display:none">View on Stellar Expert</a>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  body {
+    background: #1e1e2e;
+  }
+
+  button.primary {
+    background: #4a1a6b;
+    border-color: #6a2a8b;
+  }
+
+  button.primary:hover {
+    background: #5a2a7b;
+  }
+
+  .message-display {
+    background: #1a2040;
+    border: 1px solid #2a3060;
+    border-radius: 6px;
+    padding: 1rem;
+    margin: 1rem 0;
+  }
+
+  .message-display .label {
+    color: #808090;
+    font-size: 0.8rem;
+  }
+
+  .message-display .value {
+    color: #e0e0e0;
+    font-size: 0.95rem;
+    margin-top: 0.25rem;
+  }
+
+  .message-display a {
+    color: #7a9ec9;
+    font-size: 0.85rem;
+    margin-top: 0.5rem;
+    display: inline-block;
+  }
+</style>
+
+<script>
+  import { Buffer } from "buffer";
+  import { Client, networks } from "status-message";
+  import {
+    buildAuthHash,
+    getAuthEntry,
+    injectPasskeySignature,
+    hex2buf,
+    buf2hex,
+    accountUrl,
+    computeAccountAddress,
+  } from "@g2c/passkey-sdk";
+  import { Keypair, Networks, TransactionBuilder, Transaction, rpc } from "@stellar/stellar-sdk";
+
+  const RPC_URL = "https://soroban-testnet.stellar.org";
+  const STATUS_CONTRACT = networks.testnet.contractId;
+  const FACTORY_CONTRACT_ID = "CC6VKNDN5FBTISOR57XXHIY6L7FSL2KBQHDNRWDEQEAD6G7JODMXWYSO";
+
+  // WebAuthn verifier WASM hash (from factory contract source)
+  const VERIFIER_WASM_HASH = Buffer.from([
+    0xb9,0x39,0x33,0x11,0xf9,0x7b,0x49,0x8f,0xbb,0x89,0x76,0xec,0x50,0xdd,0x85,0x85,0xdd,0x99,0xad,0x44,0x3b,0x8f,0x13,0xec,0x5f,0x75,0x19,0x86,0x72,0x9f,0x99,0xbe,
+  ]);
+  const VERIFIER_ADDRESS = computeAccountAddress(
+    FACTORY_CONTRACT_ID, VERIFIER_WASM_HASH, Networks.TESTNET
+  );
+
+  // --- UI refs ---
+
+  const $errorBox = document.getElementById("error-box")!;
+  const $contractInput = document.getElementById("contract-input") as HTMLInputElement;
+  const $loadBtn = document.getElementById("load-btn") as HTMLButtonElement;
+  const $currentMessage = document.getElementById("current-message")!;
+  const $messageValue = document.getElementById("message-value")!;
+  const $messageInput = document.getElementById("message-input") as HTMLInputElement;
+  const $setBtn = document.getElementById("set-btn") as HTMLButtonElement;
+  const $resultSection = document.getElementById("result-section")!;
+  const $statusValue = document.getElementById("status-value")!;
+  const $txLink = document.getElementById("tx-link") as HTMLAnchorElement;
+
+  // --- UI helpers ---
+
+  function showError(msg: string) {
+    $errorBox.textContent = msg;
+    $errorBox.style.display = "block";
+  }
+
+  function clearError() {
+    $errorBox.style.display = "none";
+  }
+
+  // --- Keypair management ---
+
+  let keypairReady: Promise<Keypair>;
+  const storedSecret = localStorage.getItem("sm:keypairSecret");
+  if (storedSecret) {
+    keypairReady = Promise.resolve(Keypair.fromSecret(storedSecret));
+  } else {
+    keypairReady = (async () => {
+      const kp = Keypair.random();
+      const resp = await fetch(
+        `https://friendbot.stellar.org?addr=${kp.publicKey()}`
+      );
+      if (!resp.ok) throw new Error(`Friendbot funding failed: ${resp.statusText}`);
+      localStorage.setItem("sm:keypairSecret", kp.secret());
+      return kp;
+    })();
+  }
+
+  // --- URL params ---
+
+  const params = new URLSearchParams(window.location.search);
+  const contractParam = params.get("contract");
+  const isResult = params.get("result") === "1";
+
+  if (contractParam) {
+    $contractInput.value = contractParam;
+  }
+
+  // --- Load message ---
+
+  async function loadMessage(contract: string) {
+    const keypair = await keypairReady;
+    const client = new Client({
+      contractId: STATUS_CONTRACT,
+      networkPassphrase: Networks.TESTNET,
+      rpcUrl: RPC_URL,
+      publicKey: keypair.publicKey(),
+    });
+
+    const tx = await client.get_message({ author: contract });
+    $currentMessage.classList.remove("hidden");
+    $messageValue.textContent = tx.result ?? "No message set";
+  }
+
+  $loadBtn.addEventListener("click", async () => {
+    clearError();
+    const contract = $contractInput.value.trim();
+    if (!contract) {
+      showError("Enter a smart account C-address");
+      return;
+    }
+
+    try {
+      $loadBtn.disabled = true;
+      $loadBtn.textContent = "Loading...";
+      await loadMessage(contract);
+    } catch (err: any) {
+      showError(`Failed to load message: ${err.message}`);
+    } finally {
+      $loadBtn.disabled = false;
+      $loadBtn.textContent = "Load Message";
+    }
+  });
+
+  // --- Set message ---
+
+  $setBtn.addEventListener("click", async () => {
+    clearError();
+    const contract = $contractInput.value.trim();
+    const message = $messageInput.value.trim();
+
+    if (!contract) {
+      showError("Enter a smart account C-address");
+      return;
+    }
+    if (!message) {
+      showError("Enter a message");
+      return;
+    }
+
+    try {
+      $setBtn.disabled = true;
+      $setBtn.textContent = "Building transaction...";
+
+      const keypair = await keypairReady;
+      const client = new Client({
+        contractId: STATUS_CONTRACT,
+        networkPassphrase: Networks.TESTNET,
+        rpcUrl: RPC_URL,
+        publicKey: keypair.publicKey(),
+      });
+
+      const tx = await client.udpate_message({ message, author: contract }, { simulate: true } );
+      const sim = tx.simulation as rpc.Api.SimulateTransactionSuccessResponse;
+
+      // Extract auth entry and compute hash
+      const authEntry = getAuthEntry(sim);
+      const lastLedger = sim.latestLedger;
+      const authHash = buildAuthHash(authEntry, Networks.TESTNET, lastLedger);
+      const authHashHex = buf2hex(authHash);
+
+      // Store transaction data for after redirect
+      localStorage.setItem("sm:txXdr", tx.built!.toXDR());
+      localStorage.setItem("sm:lastLedger", lastLedger.toString());
+      localStorage.setItem("sm:contract", contract);
+
+      // Redirect to account subdomain for passkey signing
+      const callback = `${window.location.origin}/status-message/?result=1&contract=${contract}`;
+      const signUrl = accountUrl(
+        window.location.host,
+        contract,
+        `/account/?sign=${authHashHex}&callback=${encodeURIComponent(callback)}`
+      );
+      window.location.href = signUrl;
+    } catch (err: any) {
+      showError(`Failed to build transaction: ${err.message}`);
+      $setBtn.disabled = false;
+      $setBtn.textContent = "Set Message";
+    }
+  });
+
+  // --- Handle return from signing ---
+
+  if (isResult) {
+    const authenticatorData = params.get("authenticatorData");
+    const clientDataJSON = params.get("clientDataJSON");
+    const signature = params.get("signature");
+    const publicKeyHex = params.get("publicKey");
+
+    if (params.get("error")) {
+      showError("Signature request was denied.");
+    } else if (authenticatorData && clientDataJSON && signature && publicKeyHex) {
+      (async () => {
+        try {
+          const txXdr = localStorage.getItem("sm:txXdr");
+          const lastLedgerStr = localStorage.getItem("sm:lastLedger");
+          const keypairSecret = localStorage.getItem("sm:keypairSecret");
+
+          if (!txXdr || !lastLedgerStr || !keypairSecret) {
+            throw new Error("Missing stored transaction data. Please try again.");
+          }
+
+          const lastLedger = parseInt(lastLedgerStr, 10);
+          const keypair = Keypair.fromSecret(keypairSecret);
+
+          // Reconstruct transaction from stored XDR
+          const authTxn = TransactionBuilder.fromXDR(txXdr, Networks.TESTNET) as Transaction;
+
+          // Inject passkey signature into auth entry (OZ smart account format)
+          injectPasskeySignature(
+            authTxn,
+            {
+              authenticatorData: hex2buf(authenticatorData),
+              clientDataJson: hex2buf(clientDataJSON),
+              signature: hex2buf(signature),
+            },
+            VERIFIER_ADDRESS,
+            hex2buf(publicKeyHex),
+            lastLedger
+          );
+
+          // Re-simulate with real signature for accurate resource estimates
+          const server = new rpc.Server(RPC_URL);
+          const sim = await server.simulateTransaction(authTxn);
+
+          if (rpc.Api.isSimulationError(sim) || rpc.Api.isSimulationRestore(sim)) {
+            throw new Error(`Re-simulation failed: ${"error" in sim ? sim.error : "restore needed"}`);
+          }
+
+          // Re-assemble with updated resources/fees
+          const finalTx = rpc.assembleTransaction(authTxn, sim).build();
+
+          // Sign envelope with source keypair
+          finalTx.sign(keypair);
+
+          // Submit to the network
+          $resultSection.classList.remove("hidden");
+          $statusValue.textContent = "Submitting transaction...";
+          const sendResult = await server.sendTransaction(finalTx);
+
+          if (sendResult.status === "ERROR") {
+            throw new Error(`Transaction rejected: ${sendResult.errorResult?.toXDR("base64") ?? "unknown"}`);
+          }
+
+          // Poll for confirmation
+          $statusValue.textContent = "Waiting for confirmation...";
+          let getResult = await server.getTransaction(sendResult.hash);
+          while (getResult.status === "NOT_FOUND") {
+            await new Promise((r) => setTimeout(r, 1500));
+            getResult = await server.getTransaction(sendResult.hash);
+          }
+
+          if (getResult.status === "SUCCESS") {
+            $statusValue.textContent = "Message updated successfully!";
+            $txLink.href = `https://stellar.expert/explorer/testnet/tx/${sendResult.hash}`;
+            $txLink.style.display = "inline";
+
+            // Reload the current message
+            const contract = $contractInput.value.trim();
+            if (contract) {
+              try {
+                await loadMessage(contract);
+              } catch (_) {
+                // non-critical, ignore
+              }
+            }
+          } else {
+            throw new Error(`Transaction failed: ${getResult.status}`);
+          }
+
+          // Clean up stored transaction data and URL params
+          localStorage.removeItem("sm:txXdr");
+          localStorage.removeItem("sm:lastLedger");
+          localStorage.removeItem("sm:contract");
+          const cleanUrl = new URL(window.location.href);
+          cleanUrl.search = contractParam ? `?contract=${contractParam}` : "";
+          window.history.replaceState({}, "", cleanUrl);
+        } catch (err: any) {
+          showError(`Failed: ${err.message}`);
+        }
+      })();
+    }
+  }
+</script>

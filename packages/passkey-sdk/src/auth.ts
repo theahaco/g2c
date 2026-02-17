@@ -1,14 +1,9 @@
-import {
-  hash,
-  xdr,
-  rpc,
-  Operation,
-} from "@stellar/stellar-sdk";
+import { hash, xdr, rpc, Operation, Address } from "@stellar/stellar-sdk";
 import { derToCompact } from "./signature.js";
 import type { PasskeySignature } from "./types.js";
 
 /** Default ledger offset for signature expiration. */
-const DEFAULT_EXPIRATION_OFFSET = 100;
+const DEFAULT_EXPIRATION_OFFSET = 10000;
 
 /**
  * Compute the authorization hash for a Soroban auth entry.
@@ -86,7 +81,7 @@ export function injectPasskeySignature(
   transaction: { operations: readonly Operation[] },
   passkeySignature: PasskeySignature,
   lastLedger: number,
-  expirationLedgerOffset: number = DEFAULT_EXPIRATION_OFFSET
+  expirationLedgerOffset: number = DEFAULT_EXPIRATION_OFFSET,
 ): void {
   const op = transaction.operations[0] as Operation.InvokeHostFunction;
   const creds = op.auth?.[0]?.credentials().address();
@@ -96,20 +91,42 @@ export function injectPasskeySignature(
   }
 
   creds.signatureExpirationLedger(lastLedger + expirationLedgerOffset);
+
+  // WebAuthnSigData struct (field names must match the contract type)
+  const sigDataScVal = xdr.ScVal.scvMap([
+    new xdr.ScMapEntry({
+      key: xdr.ScVal.scvSymbol("authenticator_data"),
+      val: xdr.ScVal.scvBytes(Buffer.from(passkeySignature.authenticatorData)),
+    }),
+    new xdr.ScMapEntry({
+      key: xdr.ScVal.scvSymbol("client_data"),
+      val: xdr.ScVal.scvBytes(Buffer.from(passkeySignature.clientDataJson)),
+    }),
+    new xdr.ScMapEntry({
+      key: xdr.ScVal.scvSymbol("signature"),
+      val: xdr.ScVal.scvBytes(Buffer.from(passkeySignature.signature)),
+    }),
+  ]);
+
+  // XDR-encode WebAuthnSigData to raw bytes for the Signatures map value
+  const sigDataBytes = sigDataScVal.toXDR();
+
+  // Signer::External(verifier_address, public_key) enum variant
+  const signerScVal = xdr.ScVal.scvVec([
+    xdr.ScVal.scvSymbol("External"),
+    Address.fromString(verifierAddress).toScVal(),
+    xdr.ScVal.scvBytes(Buffer.from(publicKey)),
+  ]);
+
+  // Signatures tuple struct → Vec([Map<Signer, Bytes>])
   creds.signature(
-    xdr.ScVal.scvMap([
-      new xdr.ScMapEntry({
-        key: xdr.ScVal.scvSymbol("authenticator_data"),
-        val: xdr.ScVal.scvBytes(Buffer.from(passkeySignature.authenticatorData)),
-      }),
-      new xdr.ScMapEntry({
-        key: xdr.ScVal.scvSymbol("client_data_json"),
-        val: xdr.ScVal.scvBytes(Buffer.from(passkeySignature.clientDataJson)),
-      }),
-      new xdr.ScMapEntry({
-        key: xdr.ScVal.scvSymbol("signature"),
-        val: xdr.ScVal.scvBytes(Buffer.from(passkeySignature.signature)),
-      }),
-    ])
+    xdr.ScVal.scvVec([
+      xdr.ScVal.scvMap([
+        new xdr.ScMapEntry({
+          key: signerScVal,
+          val: xdr.ScVal.scvBytes(sigDataBytes),
+        }),
+      ]),
+    ]),
   );
 }

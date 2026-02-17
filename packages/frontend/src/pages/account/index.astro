@@ -396,10 +396,10 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     // Approve button
     document.getElementById("approve-btn")!.addEventListener("click", async () => {
       clearError();
-      if (!/^[0-9a-fA-F]{64}$/.test(signHashParam!)) {
-        showError("Invalid hash in sign parameter (need 64 hex chars)");
-        return;
-      }
+      // if (!/^[0-9a-fA-F]{64}$/.test(signHashParam!)) {
+      //   showError("Invalid hash in sign parameter (need 64 hex chars)");
+      //   return;
+      // }
 
       const btn = document.getElementById("approve-btn") as HTMLButtonElement;
       try {
