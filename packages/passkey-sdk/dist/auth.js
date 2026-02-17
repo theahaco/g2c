@@ -92,17 +92,14 @@ export function injectPasskeySignature(transaction, passkeySignature, verifierAd
         Address.fromString(verifierAddress).toScVal(),
         xdr.ScVal.scvBytes(Buffer.from(publicKey)),
     ]);
-    // Signatures tuple struct: { "0": Map<Signer, Bytes> }
-    creds.signature(xdr.ScVal.scvMap([
-        new xdr.ScMapEntry({
-            key: xdr.ScVal.scvSymbol("0"),
-            val: xdr.ScVal.scvMap([
-                new xdr.ScMapEntry({
-                    key: signerScVal,
-                    val: xdr.ScVal.scvBytes(sigDataBytes),
-                }),
-            ]),
-        }),
+    // Signatures tuple struct → Vec([Map<Signer, Bytes>])
+    creds.signature(xdr.ScVal.scvVec([
+        xdr.ScVal.scvMap([
+            new xdr.ScMapEntry({
+                key: signerScVal,
+                val: xdr.ScVal.scvBytes(sigDataBytes),
+            }),
+        ]),
     ]));
 }
 //# sourceMappingURL=auth.js.map

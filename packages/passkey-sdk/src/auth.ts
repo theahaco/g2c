@@ -91,22 +91,44 @@ export function injectPasskeySignature(
   }
 
   creds.signatureExpirationLedger(lastLedger + expirationLedgerOffset);
+
+  // WebAuthnSigData struct (field names must match the contract type)
+  const sigDataScVal = xdr.ScVal.scvMap([
+    new xdr.ScMapEntry({
+      key: xdr.ScVal.scvSymbol("authenticator_data"),
+      val: xdr.ScVal.scvBytes(
+        Buffer.from(passkeySignature.authenticatorData),
+      ),
+    }),
+    new xdr.ScMapEntry({
+      key: xdr.ScVal.scvSymbol("client_data"),
+      val: xdr.ScVal.scvBytes(Buffer.from(passkeySignature.clientDataJson)),
+    }),
+    new xdr.ScMapEntry({
+      key: xdr.ScVal.scvSymbol("signature"),
+      val: xdr.ScVal.scvBytes(Buffer.from(passkeySignature.signature)),
+    }),
+  ]);
+
+  // XDR-encode WebAuthnSigData to raw bytes
+  const sigDataBytes = sigDataScVal.toXDR();
+
+  // Signer::External(verifier_address, public_key) enum variant
+  const signerScVal = xdr.ScVal.scvVec([
+    xdr.ScVal.scvSymbol("External"),
+    Address.fromString(verifierAddress).toScVal(),
+    xdr.ScVal.scvBytes(Buffer.from(publicKey)),
+  ]);
+
+  // Signatures tuple struct → Vec([Map<Signer, Bytes>])
   creds.signature(
-    xdr.ScVal.scvMap([
-      new xdr.ScMapEntry({
-        key: xdr.ScVal.scvSymbol("authenticator_data"),
-        val: xdr.ScVal.scvBytes(
-          Buffer.from(passkeySignature.authenticatorData),
-        ),
-      }),
-      new xdr.ScMapEntry({
-        key: xdr.ScVal.scvSymbol("client_data_json"),
-        val: xdr.ScVal.scvBytes(Buffer.from(passkeySignature.clientDataJson)),
-      }),
-      new xdr.ScMapEntry({
-        key: xdr.ScVal.scvSymbol("signature"),
-        val: xdr.ScVal.scvBytes(Buffer.from(passkeySignature.signature)),
-      }),
+    xdr.ScVal.scvVec([
+      xdr.ScVal.scvMap([
+        new xdr.ScMapEntry({
+          key: signerScVal,
+          val: xdr.ScVal.scvBytes(sigDataBytes),
+        }),
+      ]),
     ]),
   );
 }
