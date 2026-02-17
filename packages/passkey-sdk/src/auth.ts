@@ -71,17 +71,22 @@ export function parseAssertionResponse(assertionResponse: {
 /**
  * Inject a passkey signature into a transaction's Soroban auth credentials.
  *
- * Modifies the transaction's first auth entry in-place, setting the signature
- * expiration ledger and the passkey signature map (authenticator_data, client_data_json, signature).
+ * Constructs the OZ smart account `Signatures(Map<Signer, Bytes>)` format:
+ * - Key: `Signer::External(verifier_address, public_key)`
+ * - Value: XDR-encoded `WebAuthnSigData { authenticator_data, client_data, signature }`
  *
  * @param transaction - The assembled transaction from simulation
  * @param passkeySignature - Parsed passkey signature components
+ * @param verifierAddress - Address of the WebAuthn verifier contract
+ * @param publicKey - 65-byte uncompressed P-256 public key
  * @param lastLedger - Current ledger sequence number
  * @param expirationLedgerOffset - How many ledgers the signature is valid for (default 100)
  */
 export function injectPasskeySignature(
   transaction: { operations: readonly Operation[] },
   passkeySignature: PasskeySignature,
+  verifierAddress: string,
+  publicKey: Uint8Array,
   lastLedger: number,
   expirationLedgerOffset: number = DEFAULT_EXPIRATION_OFFSET,
 ): void {
