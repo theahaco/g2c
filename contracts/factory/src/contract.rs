@@ -1,7 +1,3 @@
-// The `ref_option` lint is triggered by Soroban SDK macro-generated code
-// (contractclient/contractargs) for `Option<u32>` parameters, not by our code.
-#![allow(clippy::ref_option)]
-
 use soroban_sdk::{
     contract, contractimpl, deploy::DeployerWithAddress, Address, Bytes, BytesN, Env,
 };
