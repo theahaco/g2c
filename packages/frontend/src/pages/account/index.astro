@@ -548,18 +548,8 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   // Set dApp link
   if (contractId) {
     const $dappLink = document.getElementById("dapp-link") as HTMLAnchorElement;
-    const protocol = window.location.protocol;
-    const host = window.location.hostname;
-    let dappBase: string;
-    if (host === "localhost" || host.endsWith(".localhost")) {
-      const port = window.location.port || "3000";
-      dappBase = `localhost:${port}`;
-    } else {
-      // strip the contract subdomain to get the root domain
-      const rootHost = host.split(".").slice(1).join(".");
-      dappBase = rootHost;
-    }
-    $dappLink.href = `${protocol}//${dappBase}/dapp/?contract=${contractId}`;
+    const rootHost = stripSubdomain(window.location.host);
+    $dappLink.href = `//${rootHost}/dapp/?contract=${contractId}`;
   }
 
   if (isSigningMode) {

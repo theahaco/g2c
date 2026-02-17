@@ -108,25 +108,16 @@ import BaseLayout from "../layouts/BaseLayout.astro";
   }
 
   // Show previously created accounts
-  const savedAccounts: string[] = JSON.parse(localStorage.getItem("g2c:accounts") || "[]");
+  const savedAccounts = loadAccounts();
   if (savedAccounts.length > 0) {
     const $accountsSection = document.getElementById("accounts-section")!;
     const $accountsList = document.getElementById("accounts-list")!;
     $accountsSection.classList.remove("hidden");
 
-    const host = window.location.hostname;
-    const protocol = window.location.protocol;
-
     for (const cAddress of savedAccounts) {
-      let accountBase: string;
-      if (host === "localhost" || host === "127.0.0.1") {
-        accountBase = `${cAddress.toLowerCase()}.localhost:${window.location.port || "3000"}`;
-      } else {
-        accountBase = `${cAddress.toLowerCase()}.${host}`;
-      }
       const li = document.createElement("li");
       const a = document.createElement("a");
-      a.href = `${protocol}//${accountBase}/account/`;
+      a.href = accountUrl(window.location.host, cAddress, "/account/");
       a.textContent = cAddress;
       li.appendChild(a);
       $accountsList.appendChild(li);

@@ -275,12 +275,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
         throw new Error(`Transaction failed: ${getResponse.status}`);
       }
 
-      // Save C-address to localStorage
-      const accounts: string[] = JSON.parse(localStorage.getItem("g2c:accounts") || "[]");
-      if (!accounts.includes(contractId!)) {
-        accounts.push(contractId!);
-        localStorage.setItem("g2c:accounts", JSON.stringify(accounts));
-      }
+      saveAccount(contractId!);
 
       $deployResult.style.display = "block";
       $deployResult.innerHTML = `Account deployed!\nC-address: <a href="https://stellar.expert/explorer/testnet/contract/${contractId}" target="_blank" rel="noopener">${contractId}</a>`;
