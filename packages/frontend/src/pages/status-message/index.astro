@@ -348,10 +348,13 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
             throw new Error(`Transaction failed: ${getResult.status}`);
           }
 
-          // Clean up stored transaction data
+          // Clean up stored transaction data and URL params
           localStorage.removeItem("sm:txXdr");
           localStorage.removeItem("sm:lastLedger");
           localStorage.removeItem("sm:contract");
+          const cleanUrl = new URL(window.location.href);
+          cleanUrl.search = contractParam ? `?contract=${contractParam}` : "";
+          window.history.replaceState({}, "", cleanUrl);
         } catch (err: any) {
           showError(`Failed: ${err.message}`);
         }
