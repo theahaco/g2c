@@ -73,7 +73,7 @@ export function parseAssertionResponse(assertionResponse: {
  *
  * Constructs the OZ smart account `Signatures(Map<Signer, Bytes>)` format:
  * - Key: `Signer::External(verifier_address, public_key)`
- * - Value: XDR-encoded `WebAuthnSigData { authenticator_data, client_data, signature }`
+ * - Value: `WebAuthnSigData { authenticator_data, client_data, signature }` as native Map ScVal
  *
  * @param transaction - The assembled transaction from simulation
  * @param passkeySignature - Parsed passkey signature components
