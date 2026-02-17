@@ -19,28 +19,30 @@ export function buildAuthHash(
   authEntry: xdr.SorobanAuthorizationEntry,
   networkPassphrase: string,
   lastLedger: number,
-  expirationLedgerOffset: number = DEFAULT_EXPIRATION_OFFSET
+  expirationLedgerOffset: number = DEFAULT_EXPIRATION_OFFSET,
 ): Buffer {
   const creds = authEntry.credentials().address();
   const expirationLedger = lastLedger + expirationLedgerOffset;
+  // Convert nonce to BigInt to avoid cross-package instanceof issues
+  // when the auth entry originates from a different stellar-sdk copy
+  const nonce = BigInt(creds.nonce().toString());
 
-  return hash(
-    xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
-      new xdr.HashIdPreimageSorobanAuthorization({
-        networkId: hash(Buffer.from(networkPassphrase, "utf-8")),
-        nonce: creds.nonce(),
-        signatureExpirationLedger: expirationLedger,
-        invocation: authEntry.rootInvocation(),
-      })
-    ).toXDR()
+  let entry = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
+    new xdr.HashIdPreimageSorobanAuthorization({
+      networkId: hash(Buffer.from(networkPassphrase, "utf-8")),
+      nonce,
+      signatureExpirationLedger: expirationLedger,
+      invocation: authEntry.rootInvocation(),
+    }),
   );
+  return hash(entry.toXDR());
 }
 
 /**
  * Extract the first Soroban auth entry from a simulation result.
  */
 export function getAuthEntry(
-  simulation: rpc.Api.SimulateTransactionSuccessResponse
+  simulation: rpc.Api.SimulateTransactionSuccessResponse,
 ): xdr.SorobanAuthorizationEntry {
   const auth = simulation.result?.auth;
   if (!auth || auth.length === 0) {
