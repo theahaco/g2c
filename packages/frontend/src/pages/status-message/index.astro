@@ -1,0 +1,309 @@
+---
+import BaseLayout from "../../layouts/BaseLayout.astro";
+---
+
+<BaseLayout title="Status Message">
+  <h1>Status Message</h1>
+  <p class="info">Set a status message on-chain via your smart account.</p>
+
+  <div id="error-box" class="error" style="display:none"></div>
+
+  <!-- Read current message -->
+  <section>
+    <h2>1. Read Message</h2>
+    <div class="field">
+      <label for="contract-input">Smart Account C-address</label>
+      <input id="contract-input" placeholder="C..." />
+    </div>
+    <div class="field">
+      <button id="load-btn">Load Message</button>
+    </div>
+    <div id="current-message" class="message-display hidden">
+      <div class="label">Current message</div>
+      <div class="value" id="message-value"></div>
+    </div>
+  </section>
+
+  <!-- Set new message -->
+  <section>
+    <h2>2. Set Message</h2>
+    <div class="field">
+      <label for="message-input">New message</label>
+      <input id="message-input" placeholder="Hello, Soroban!" />
+    </div>
+    <div class="field">
+      <button id="set-btn" class="primary">Set Message</button>
+    </div>
+  </section>
+
+  <!-- Result (shown after redirect back) -->
+  <section id="result-section" class="hidden">
+    <h2>Signed Transaction</h2>
+    <p class="info">Copy this XDR and submit it to the network.</p>
+    <pre id="xdr-display"></pre>
+    <div class="field">
+      <button id="copy-btn">Copy XDR</button>
+    </div>
+  </section>
+</BaseLayout>
+
+<style>
+  body {
+    background: #1e1e2e;
+  }
+
+  button.primary {
+    background: #4a1a6b;
+    border-color: #6a2a8b;
+  }
+
+  button.primary:hover {
+    background: #5a2a7b;
+  }
+
+  .message-display {
+    background: #1a2040;
+    border: 1px solid #2a3060;
+    border-radius: 6px;
+    padding: 1rem;
+    margin: 1rem 0;
+  }
+
+  .message-display .label {
+    color: #808090;
+    font-size: 0.8rem;
+  }
+
+  .message-display .value {
+    color: #e0e0e0;
+    font-size: 0.95rem;
+    margin-top: 0.25rem;
+  }
+</style>
+
+<script>
+  import { Client, networks } from "status-message";
+  import {
+    buildAuthHash,
+    getAuthEntry,
+    injectPasskeySignature,
+    hex2buf,
+    buf2hex,
+    accountUrl,
+  } from "@g2c/passkey-sdk";
+  import { Keypair, Networks, TransactionBuilder, Transaction, rpc } from "@stellar/stellar-sdk";
+
+  const RPC_URL = "https://soroban-testnet.stellar.org";
+  const STATUS_CONTRACT = networks.testnet.contractId;
+
+  // --- UI refs ---
+
+  const $errorBox = document.getElementById("error-box")!;
+  const $contractInput = document.getElementById("contract-input") as HTMLInputElement;
+  const $loadBtn = document.getElementById("load-btn") as HTMLButtonElement;
+  const $currentMessage = document.getElementById("current-message")!;
+  const $messageValue = document.getElementById("message-value")!;
+  const $messageInput = document.getElementById("message-input") as HTMLInputElement;
+  const $setBtn = document.getElementById("set-btn") as HTMLButtonElement;
+  const $resultSection = document.getElementById("result-section")!;
+  const $xdrDisplay = document.getElementById("xdr-display")!;
+  const $copyBtn = document.getElementById("copy-btn") as HTMLButtonElement;
+
+  // --- UI helpers ---
+
+  function showError(msg: string) {
+    $errorBox.textContent = msg;
+    $errorBox.style.display = "block";
+  }
+
+  function clearError() {
+    $errorBox.style.display = "none";
+  }
+
+  // --- Keypair management ---
+
+  let keypairReady: Promise<Keypair>;
+  const storedSecret = localStorage.getItem("sm:keypairSecret");
+  if (storedSecret) {
+    keypairReady = Promise.resolve(Keypair.fromSecret(storedSecret));
+  } else {
+    keypairReady = (async () => {
+      const kp = Keypair.random();
+      const resp = await fetch(
+        `https://friendbot.stellar.org?addr=${kp.publicKey()}`
+      );
+      if (!resp.ok) throw new Error(`Friendbot funding failed: ${resp.statusText}`);
+      localStorage.setItem("sm:keypairSecret", kp.secret());
+      return kp;
+    })();
+  }
+
+  // --- URL params ---
+
+  const params = new URLSearchParams(window.location.search);
+  const contractParam = params.get("contract");
+  const isResult = params.get("result") === "1";
+
+  if (contractParam) {
+    $contractInput.value = contractParam;
+  }
+
+  // --- Load message ---
+
+  $loadBtn.addEventListener("click", async () => {
+    clearError();
+    const contract = $contractInput.value.trim();
+    if (!contract) {
+      showError("Enter a smart account C-address");
+      return;
+    }
+
+    try {
+      $loadBtn.disabled = true;
+      $loadBtn.textContent = "Loading...";
+
+      const keypair = await keypairReady;
+      const client = new Client({
+        contractId: STATUS_CONTRACT,
+        networkPassphrase: Networks.TESTNET,
+        rpcUrl: RPC_URL,
+        publicKey: keypair.publicKey(),
+      });
+
+      const tx = await client.get_message({ author: contract });
+      const message = tx.result;
+
+      $currentMessage.classList.remove("hidden");
+      $messageValue.textContent = message ?? "No message set";
+    } catch (err: any) {
+      showError(`Failed to load message: ${err.message}`);
+    } finally {
+      $loadBtn.disabled = false;
+      $loadBtn.textContent = "Load Message";
+    }
+  });
+
+  // --- Set message ---
+
+  $setBtn.addEventListener("click", async () => {
+    clearError();
+    const contract = $contractInput.value.trim();
+    const message = $messageInput.value.trim();
+
+    if (!contract) {
+      showError("Enter a smart account C-address");
+      return;
+    }
+    if (!message) {
+      showError("Enter a message");
+      return;
+    }
+
+    try {
+      $setBtn.disabled = true;
+      $setBtn.textContent = "Building transaction...";
+
+      const keypair = await keypairReady;
+      const client = new Client({
+        contractId: STATUS_CONTRACT,
+        networkPassphrase: Networks.TESTNET,
+        rpcUrl: RPC_URL,
+        publicKey: keypair.publicKey(),
+      });
+
+      const tx = await client.udpate_message({ message, author: contract });
+      const sim = tx.simulation as rpc.Api.SimulateTransactionSuccessResponse;
+
+      // Extract auth entry and compute hash
+      const authEntry = getAuthEntry(sim);
+      const lastLedger = sim.latestLedger;
+      const authHash = buildAuthHash(authEntry, Networks.TESTNET, lastLedger);
+      const authHashHex = buf2hex(authHash);
+
+      // Store transaction data for after redirect
+      localStorage.setItem("sm:txXdr", tx.built!.toXDR());
+      localStorage.setItem("sm:lastLedger", lastLedger.toString());
+      localStorage.setItem("sm:contract", contract);
+
+      // Redirect to account subdomain for passkey signing
+      const callback = `${window.location.origin}/status-message/?result=1&contract=${contract}`;
+      const signUrl = accountUrl(
+        window.location.host,
+        contract,
+        `/account/?sign=${authHashHex}&callback=${encodeURIComponent(callback)}`
+      );
+      window.location.href = signUrl;
+    } catch (err: any) {
+      showError(`Failed to build transaction: ${err.message}`);
+      $setBtn.disabled = false;
+      $setBtn.textContent = "Set Message";
+    }
+  });
+
+  // --- Handle return from signing ---
+
+  if (isResult) {
+    const authenticatorData = params.get("authenticatorData");
+    const clientDataJSON = params.get("clientDataJSON");
+    const signature = params.get("signature");
+
+    if (params.get("error")) {
+      showError("Signature request was denied.");
+    } else if (authenticatorData && clientDataJSON && signature) {
+      try {
+        const txXdr = localStorage.getItem("sm:txXdr");
+        const lastLedgerStr = localStorage.getItem("sm:lastLedger");
+        const keypairSecret = localStorage.getItem("sm:keypairSecret");
+
+        if (!txXdr || !lastLedgerStr || !keypairSecret) {
+          throw new Error("Missing stored transaction data. Please try again.");
+        }
+
+        const lastLedger = parseInt(lastLedgerStr, 10);
+        const keypair = Keypair.fromSecret(keypairSecret);
+
+        // Reconstruct transaction from stored XDR
+        const tx = TransactionBuilder.fromXDR(txXdr, Networks.TESTNET) as Transaction;
+
+        // Inject passkey signature into auth entry
+        injectPasskeySignature(
+          tx,
+          {
+            authenticatorData: hex2buf(authenticatorData),
+            clientDataJson: hex2buf(clientDataJSON),
+            signature: hex2buf(signature),
+          },
+          lastLedger
+        );
+
+        // Sign envelope with source keypair
+        tx.sign(keypair);
+
+        // Display the fully signed transaction XDR
+        $resultSection.classList.remove("hidden");
+        $xdrDisplay.textContent = tx.toXDR();
+
+        // Clean up stored transaction data
+        localStorage.removeItem("sm:txXdr");
+        localStorage.removeItem("sm:lastLedger");
+        localStorage.removeItem("sm:contract");
+      } catch (err: any) {
+        showError(`Failed to assemble signed transaction: ${err.message}`);
+      }
+    }
+  }
+
+  // --- Copy button ---
+
+  $copyBtn.addEventListener("click", () => {
+    const xdr = $xdrDisplay.textContent;
+    if (xdr) {
+      navigator.clipboard.writeText(xdr).then(() => {
+        $copyBtn.textContent = "Copied!";
+        setTimeout(() => {
+          $copyBtn.textContent = "Copy XDR";
+        }, 2000);
+      });
+    }
+  });
+</script>
