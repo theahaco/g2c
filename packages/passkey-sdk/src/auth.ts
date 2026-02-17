@@ -25,7 +25,7 @@ export function buildAuthHash(
   const expirationLedger = lastLedger + expirationLedgerOffset;
   // Convert nonce to BigInt to avoid cross-package instanceof issues
   // when the auth entry originates from a different stellar-sdk copy
-  const nonce = BigInt(creds.nonce().toString());
+  const nonce = xdr.Int64.fromString(creds.nonce().toString());
 
   let entry = xdr.HashIdPreimage.envelopeTypeSorobanAuthorization(
     new xdr.HashIdPreimageSorobanAuthorization({
