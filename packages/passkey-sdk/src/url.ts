@@ -40,14 +40,23 @@ export function accountUrl(host: string, contractId: string, path: string = "/")
 }
 
 /**
- * Strip the first subdomain segment from a host string.
- * e.g. "cabc1234.example.com" → "example.com"
- *      "cabc1234.localhost:3000" → "localhost:3000"
+ * Strip the contract ID from a host string, preserving any preview prefix.
+ *   "cabc1234.mysoroban.xyz"            → "mysoroban.xyz"
+ *   "cabc1234--pr-10.mysoroban.xyz"     → "pr-10.mysoroban.xyz"
+ *   "cabc1234.localhost:3000"           → "localhost:3000"
  */
 export function stripSubdomain(host: string): string {
-  const dotIndex = host.indexOf(".");
-  if (dotIndex === -1) return host;
-  return host.slice(dotIndex + 1);
+  const parts = host.split(".");
+  if (parts.length <= 1) return host;
+
+  const sub = parts[0];
+  const rest = parts.slice(1).join(".");
+  const sepIndex = sub.indexOf(PREVIEW_SEP);
+  if (sepIndex !== -1) {
+    // Preserve the preview prefix: "contract--pr-10" → "pr-10"
+    return `pr-${sub.slice(sepIndex + PREVIEW_SEP.length)}.${rest}`;
+  }
+  return rest;
 }
 
 /**

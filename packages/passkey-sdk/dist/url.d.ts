@@ -21,9 +21,10 @@ export declare function contractIdFromHostname(hostname: string): string | null;
  */
 export declare function accountUrl(host: string, contractId: string, path?: string): string;
 /**
- * Strip the first subdomain segment from a host string.
- * e.g. "cabc1234.example.com" → "example.com"
- *      "cabc1234.localhost:3000" → "localhost:3000"
+ * Strip the contract ID from a host string, preserving any preview prefix.
+ *   "cabc1234.mysoroban.xyz"            → "mysoroban.xyz"
+ *   "cabc1234--pr-10.mysoroban.xyz"     → "pr-10.mysoroban.xyz"
+ *   "cabc1234.localhost:3000"           → "localhost:3000"
  */
 export declare function stripSubdomain(host: string): string;
 //# sourceMappingURL=url.d.ts.map
