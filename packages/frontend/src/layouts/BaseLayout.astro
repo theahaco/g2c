@@ -14,7 +14,7 @@ const { title } = Astro.props;
     <title>{title}</title>
   </head>
   <body>
-    <div id="preview-banner" style="display:none"></div>
+    <a id="preview-banner" style="display:none" target="_blank" rel="noopener"></a>
     <slot />
   </body>
 </html>
@@ -27,13 +27,19 @@ const { title } = Astro.props;
     top: 0;
     left: 0;
     right: 0;
+    display: none;
     background: #e11d48;
     color: #fff;
     font-size: 0.95rem;
     font-weight: 700;
     padding: 0.5rem 1rem;
     text-align: center;
+    text-decoration: none;
     z-index: 9999;
+  }
+
+  #preview-banner:hover {
+    background: #be123c;
   }
 
   body:has(#preview-banner[style*="display: block"]) {
@@ -45,8 +51,10 @@ const { title } = Astro.props;
   const sub = window.location.hostname.split(".")[0];
   const match = sub.match(/(?:--)?pr-(\d+)$/);
   if (match) {
-    const banner = document.getElementById("preview-banner")!;
-    banner.textContent = `Preview PR #${match[1]}`;
+    const prNum = match[1];
+    const banner = document.getElementById("preview-banner") as HTMLAnchorElement;
+    banner.textContent = `Preview PR #${prNum}`;
+    banner.href = `https://github.com/theahaco/g2c/pull/${prNum}`;
     banner.style.display = "block";
   }
 </script>
