@@ -2,7 +2,7 @@ name: PR Preview
 
 on:
   pull_request:
-    types: [opened, synchronize, reopened, closed]
+    types: [opened, synchronize, reopened]
 
 permissions:
   contents: read
@@ -10,11 +10,9 @@ permissions:
 
 env:
   PAGES_PROJECT: mysoroban
-  ZONE_NAME: mysoroban.xyz
 
 jobs:
   deploy:
-    if: github.event.action != 'closed'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -33,7 +31,6 @@ jobs:
         run: npx astro build --root ./packages/frontend
 
       - name: Deploy to Cloudflare Pages
-        id: deploy
         run: |
           npx wrangler pages deploy packages/frontend/dist/ \
             --project-name "$PAGES_PROJECT" \
@@ -42,58 +39,13 @@ jobs:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
 
-      - name: Create preview DNS record
-        run: |
-          PR_NUM="${{ github.event.pull_request.number }}"
-          RECORD_NAME="*.pr-${PR_NUM}.${ZONE_NAME}"
-
-          # Get zone ID
-          ZONE_ID=$(curl -s -X GET \
-            "https://api.cloudflare.com/client/v4/zones?name=${ZONE_NAME}" \
-            -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            | jq -r '.result[0].id')
-
-          # Check if record already exists
-          EXISTING=$(curl -s -X GET \
-            "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records?name=${RECORD_NAME}&type=CNAME" \
-            -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            | jq -r '.result[0].id // empty')
-
-          if [ -n "$EXISTING" ]; then
-            # Update existing record
-            curl -s -X PUT \
-              "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records/${EXISTING}" \
-              -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
-              -H "Content-Type: application/json" \
-              --data "{
-                \"type\": \"CNAME\",
-                \"name\": \"${RECORD_NAME}\",
-                \"content\": \"${ZONE_NAME}\",
-                \"proxied\": true
-              }"
-          else
-            # Create new record
-            curl -s -X POST \
-              "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records" \
-              -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
-              -H "Content-Type: application/json" \
-              --data "{
-                \"type\": \"CNAME\",
-                \"name\": \"${RECORD_NAME}\",
-                \"content\": \"${ZONE_NAME}\",
-                \"proxied\": true
-              }"
-          fi
-
       - name: Comment preview URL on PR
         uses: actions/github-script@v7
         with:
           script: |
             const prNum = context.payload.pull_request.number;
             const previewUrl = `https://pr-${prNum}.mysoroban.xyz`;
-            const body = `**Preview deployed!**\n\n${previewUrl}\n\nSubdomain routing: \`<contract-address>.pr-${prNum}.mysoroban.xyz\``;
+            const body = `**Preview deployed!**\n\n${previewUrl}\n\nAccount URLs: \`<contract-address>--pr-${prNum}.mysoroban.xyz\``;
 
             // Find existing bot comment
             const { data: comments } = await github.rest.issues.listComments({
@@ -120,36 +72,3 @@ jobs:
                 body,
               });
             }
-
-  cleanup:
-    if: github.event.action == 'closed'
-    runs-on: ubuntu-latest
-    steps:
-      - name: Delete preview DNS record
-        run: |
-          PR_NUM="${{ github.event.pull_request.number }}"
-          RECORD_NAME="*.pr-${PR_NUM}.${ZONE_NAME}"
-
-          # Get zone ID
-          ZONE_ID=$(curl -s -X GET \
-            "https://api.cloudflare.com/client/v4/zones?name=${ZONE_NAME}" \
-            -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            | jq -r '.result[0].id')
-
-          # Find the DNS record
-          RECORD_ID=$(curl -s -X GET \
-            "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records?name=${RECORD_NAME}&type=CNAME" \
-            -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
-            -H "Content-Type: application/json" \
-            | jq -r '.result[0].id // empty')
-
-          if [ -n "$RECORD_ID" ]; then
-            curl -s -X DELETE \
-              "https://api.cloudflare.com/client/v4/zones/${ZONE_ID}/dns_records/${RECORD_ID}" \
-              -H "Authorization: Bearer ${{ secrets.CLOUDFLARE_API_TOKEN }}" \
-              -H "Content-Type: application/json"
-            echo "Deleted DNS record for pr-${PR_NUM}"
-          else
-            echo "No DNS record found for pr-${PR_NUM}, skipping"
-          fi

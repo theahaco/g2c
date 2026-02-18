@@ -1,12 +1,21 @@
 /**
  * Extract contract ID from a subdomain hostname.
- * e.g. "cabc1234.example.com" → "CABC1234"
- * Returns null if hostname has no subdomain.
+ * Handles both production and preview URLs:
+ *   "cabc1234.mysoroban.xyz"             → "CABC1234"
+ *   "cabc1234--pr-10.mysoroban.xyz"      → "CABC1234"
+ * Returns null if hostname has no subdomain or contract ID.
  */
 export declare function contractIdFromHostname(hostname: string): string | null;
 /**
  * Build a protocol-relative URL with the contract ID as subdomain.
- * e.g. accountUrl("example.com", "CABC1234", "/account/") → "//cabc1234.example.com/account/"
+ * In preview environments (hostname contains --pr-<N>), encodes the
+ * contract ID into the same subdomain level:
+ *   accountUrl("pr-10.mysoroban.xyz", "CABC", "/account/")
+ *     → "//cabc--pr-10.mysoroban.xyz/account/"
+ *
+ * In production:
+ *   accountUrl("mysoroban.xyz", "CABC", "/account/")
+ *     → "//cabc.mysoroban.xyz/account/"
  *
  * Pass `window.location.host` (includes port) as the host parameter.
  */
