@@ -6,7 +6,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   <h1>Soroban Passkey</h1>
   <div id="status-bar">
     <div>Contract: <code id="contract-id"></code> <a id="explorer-link" class="explorer-link" target="_blank" rel="noopener" style="display:none">View on Stellar Expert</a></div>
-    <div>Balance: <code id="xlm-balance">loading...</code></div>
     <div>RP ID: <code id="rp-id"></code></div>
     <div>Stored key: <code id="stored-key">none</code></div>
   </div>
@@ -40,6 +39,13 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
   <!-- Home mode UI -->
   <div id="home-mode" class="hidden">
+    <section id="balance-section">
+      <h2>Balance</h2>
+      <div class="balance-display">
+        <span id="xlm-balance">loading...</span>
+      </div>
+    </section>
+
     <!-- Shown when a passkey is already registered -->
     <section id="passkey-info-section" class="hidden">
       <h2>Passkey</h2>
@@ -119,6 +125,16 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     padding: 0.5rem 0.75rem;
     margin: 1rem 0;
     font-size: 0.85rem;
+  }
+
+  .balance-display {
+    background: #0a2040;
+    border: 1px solid #1a3060;
+    border-radius: 6px;
+    padding: 1rem;
+    font-family: monospace;
+    font-size: 1.5rem;
+    color: #e0e0e0;
   }
 
   .signing-request {
