@@ -213,7 +213,11 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       $registerBtn.textContent = "Passkey Registered";
       $deploySection.classList.remove("hidden");
     } catch (err: any) {
-      showError(`Registration failed: ${err.message}`);
+      if (err.name === "NotAllowedError") {
+        showError("Passkey registration was blocked. If you're using an in-app browser (Twitter, Instagram, etc.), tap the menu (\u2026) and choose \"Open in Safari\" or \"Open in Browser\".");
+      } else {
+        showError(`Registration failed: ${err.message}`);
+      }
       $registerBtn.disabled = false;
       $registerBtn.textContent = "Register Passkey";
     }

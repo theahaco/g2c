@@ -474,7 +474,11 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
         document.getElementById("sign-needs-register")!.classList.add("hidden");
         document.getElementById("sign-ready")!.classList.remove("hidden");
       } catch (err: any) {
-        showError(`Registration failed: ${err.message}`);
+        if (err.name === "NotAllowedError") {
+          showError("Passkey registration was blocked. If you're using an in-app browser (Twitter, Instagram, etc.), tap the menu (\u2026) and choose \"Open in Safari\" or \"Open in Browser\".");
+        } else {
+          showError(`Registration failed: ${err.message}`);
+        }
       } finally {
         btn.disabled = false;
         btn.textContent = "Register Passkey";
@@ -506,7 +510,11 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
           window.location.href = cbUrl.toString();
         }, 500);
       } catch (err: any) {
-        showError(`Signing failed: ${err.message}`);
+        if (err.name === "NotAllowedError") {
+          showError("Passkey signing was blocked. If you're using an in-app browser (Twitter, Instagram, etc.), tap the menu (\u2026) and choose \"Open in Safari\" or \"Open in Browser\".");
+        } else {
+          showError(`Signing failed: ${err.message}`);
+        }
         btn.disabled = false;
         btn.textContent = "Approve & Sign";
       }
@@ -579,7 +587,11 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
         const newCred = loadCredential();
         if (newCred) showPasskeyInfo(newCred);
       } catch (err: any) {
-        showError(`Registration failed: ${err.message}`);
+        if (err.name === "NotAllowedError") {
+          showError("Passkey registration was blocked. If you're using an in-app browser (Twitter, Instagram, etc.), tap the menu (\u2026) and choose \"Open in Safari\" or \"Open in Browser\".");
+        } else {
+          showError(`Registration failed: ${err.message}`);
+        }
       } finally {
         $registerBtn.disabled = false;
         $registerBtn.textContent = "Register Passkey";
@@ -604,7 +616,11 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
         $signResult.style.display = "block";
         $signResult.innerHTML = formatSignResult(result);
       } catch (err: any) {
-        showError(`Signing failed: ${err.message}`);
+        if (err.name === "NotAllowedError") {
+          showError("Passkey signing was blocked. If you're using an in-app browser (Twitter, Instagram, etc.), tap the menu (\u2026) and choose \"Open in Safari\" or \"Open in Browser\".");
+        } else {
+          showError(`Signing failed: ${err.message}`);
+        }
       } finally {
         $signBtn.disabled = false;
         $signBtn.textContent = "Sign";
