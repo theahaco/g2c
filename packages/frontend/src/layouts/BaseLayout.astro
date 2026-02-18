@@ -14,10 +14,34 @@ const { title } = Astro.props;
     <title>{title}</title>
   </head>
   <body>
+    <div id="preview-banner" style="display:none"></div>
     <slot />
   </body>
 </html>
 
 <style is:global>
   @import "../styles/global.css";
+
+  #preview-banner {
+    position: fixed;
+    top: 0;
+    left: 0;
+    background: #d97706;
+    color: #000;
+    font-size: 0.75rem;
+    font-weight: 600;
+    padding: 0.2rem 0.6rem;
+    border-bottom-right-radius: 4px;
+    z-index: 9999;
+  }
 </style>
+
+<script>
+  const sub = window.location.hostname.split(".")[0];
+  const match = sub.match(/(?:--)?pr-(\d+)$/);
+  if (match) {
+    const banner = document.getElementById("preview-banner")!;
+    banner.textContent = `Preview PR #${match[1]}`;
+    banner.style.display = "block";
+  }
+</script>
