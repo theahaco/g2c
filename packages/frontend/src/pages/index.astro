@@ -94,15 +94,17 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 </style>
 
 <script>
-  import { Keypair, Networks } from "@stellar/stellar-sdk";
+  import { Keypair, Networks, rpc, xdr } from "@stellar/stellar-sdk";
   import { Client } from "factory";
   import {
     accountUrl,
     loadAccounts,
+    loadPendingAccounts,
     savePendingAccount,
+    activateAccount,
   } from "@g2c/passkey-sdk";
 
-  const FACTORY_CONTRACT_ID = "CB35ARFE6ZRHYOYHOBQ3RNCETNPBEF6EHUZSN7INU6F46QNSSZXPOV6J";
+  const FACTORY_CONTRACT_ID = "CDDMELYHOSD6M2T53F5DUYCXDS3VVOQ72E4KZMMZP37GQWII2WRKM2CC";
   const RPC_URL = "https://soroban-testnet.stellar.org";
   const FRIENDBOT_URL = "https://friendbot.stellar.org";
 
@@ -126,18 +128,44 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 
   // --- Show active accounts ---
 
-  const activeAccounts = loadAccounts();
-  if (activeAccounts.length > 0) {
+  function addAccountRow(contractId: string) {
+    const li = document.createElement("li");
+    const a = document.createElement("a");
+    a.href = accountUrl(window.location.host, contractId, "/account/");
+    a.textContent = contractId;
+    li.appendChild(a);
+    $accountsList.appendChild(li);
     $accountsSection.classList.remove("hidden");
-    for (const cAddress of activeAccounts) {
-      const li = document.createElement("li");
-      const a = document.createElement("a");
-      a.href = accountUrl(window.location.host, cAddress, "/account/");
-      a.textContent = cAddress;
-      li.appendChild(a);
-      $accountsList.appendChild(li);
+  }
+
+  const activeAccounts = loadAccounts();
+  for (const cAddress of activeAccounts) {
+    addAccountRow(cAddress);
+  }
+
+  // --- Check pending accounts against chain ---
+
+  async function checkContractExists(contractId: string): Promise<boolean> {
+    try {
+      const server = new rpc.Server(RPC_URL);
+      await server.getContractData(contractId, xdr.ScVal.scvLedgerKeyContractInstance());
+      return true;
+    } catch {
+      return false;
     }
   }
+
+  (async () => {
+    const pendingAccounts = loadPendingAccounts();
+    for (const { contractId } of pendingAccounts) {
+      if (activeAccounts.includes(contractId)) continue;
+      const exists = await checkContractExists(contractId);
+      if (exists) {
+        activateAccount(contractId);
+        addAccountRow(contractId);
+      }
+    }
+  })();
 
   // --- Create new account ---
 

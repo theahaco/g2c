@@ -467,9 +467,10 @@ export interface Client {
      * Deploy an account contract and add a passkey to it. Lastly transfer funds to the contract's account.
      *
      */
-    create_account: ({ funder, key }: {
+    create_account: ({ funder, key, amount }: {
         funder: string;
         key: Buffer;
+        amount: i128;
     }, options?: MethodOptions) => Promise<AssembledTransaction<string>>;
     /**
      * Construct and simulate a get_c_address transaction. Returns an `AssembledTransaction` object which will have a `result` field containing the result of the simulation. If this transaction changes contract state, you will need to call `signAndSend()` on the returned object.
