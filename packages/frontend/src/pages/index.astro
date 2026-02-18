@@ -2,39 +2,40 @@
 import BaseLayout from "../layouts/BaseLayout.astro";
 ---
 
-<BaseLayout title="G2C — Generate Account">
-  <h1>G2C Migration</h1>
-  <p class="info">Generate a funded Stellar keypair and predict your smart account C-address.</p>
+<BaseLayout title="G2C — Smart Accounts">
+  <h1>G2C Smart Accounts</h1>
+  <p class="info">
+    Create a Stellar smart account secured by your device's passkey (fingerprint, face, or security key).
+    No seed phrases or private keys to manage — your passkey <em>is</em> your wallet.
+  </p>
 
   <div id="error-box" class="error" style="display:none"></div>
 
-  <section>
-    <h2>1. Generate & Fund Keypair</h2>
-    <p class="info">Creates a random keypair and funds it via Friendbot on testnet.</p>
-    <div class="field">
-      <button id="generate-btn">Generate & Fund</button>
-    </div>
-    <pre id="keypair-result" style="display:none"></pre>
-  </section>
-
-  <section id="address-section" class="hidden">
-    <h2>2. Predicted C-Address</h2>
-    <p class="info">The smart account address that will be deployed by the factory.</p>
-    <pre id="c-address-result"></pre>
-  </section>
-
-  <section id="nav-section" class="hidden">
-    <h2>3. Create Smart Account</h2>
-    <p class="info">Navigate to your account's subdomain to register a passkey and deploy.</p>
-    <div class="field">
-      <a id="create-link" class="button-link">Create Account</a>
-    </div>
-  </section>
-
   <section id="accounts-section" class="hidden">
     <h2>Your Accounts</h2>
-    <p class="info">Previously created smart accounts.</p>
     <ul id="accounts-list"></ul>
+  </section>
+
+  <section>
+    <h2>Create New Account</h2>
+    <p class="info">
+      Prepares a new smart account on Stellar testnet. You'll register a passkey in the next step to secure it.
+    </p>
+    <div class="field">
+      <button id="create-btn">Create Account</button>
+    </div>
+    <div id="progress-info" class="progress" style="display:none"></div>
+  </section>
+
+  <section id="passkey-section" class="hidden">
+    <h2>Set Up Passkey</h2>
+    <p class="info">
+      Your account address is ready. Continue to register a passkey and activate your account on-chain.
+    </p>
+    <pre id="c-address-result"></pre>
+    <div class="field">
+      <a id="setup-link" class="button-link">Register Passkey & Deploy</a>
+    </div>
   </section>
 </BaseLayout>
 
@@ -59,6 +60,16 @@ import BaseLayout from "../layouts/BaseLayout.astro";
     background: #1a8b4a;
   }
 
+  .progress {
+    background: #0a2040;
+    border: 1px solid #1a3060;
+    border-radius: 4px;
+    padding: 0.5rem 0.75rem;
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: #8899aa;
+  }
+
   #accounts-list {
     list-style: none;
     padding: 0;
@@ -66,7 +77,10 @@ import BaseLayout from "../layouts/BaseLayout.astro";
   }
 
   #accounts-list li {
-    margin: 0.4rem 0;
+    margin: 0.5rem 0;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
   }
 
   #accounts-list a {
@@ -79,24 +93,55 @@ import BaseLayout from "../layouts/BaseLayout.astro";
   #accounts-list a:hover {
     color: #7dd4ed;
   }
+
+  .badge {
+    display: inline-block;
+    font-size: 0.7rem;
+    padding: 0.15rem 0.4rem;
+    border-radius: 3px;
+    font-weight: 600;
+    text-transform: uppercase;
+  }
+
+  .badge-active {
+    background: #1a6b3a;
+    color: #a0e0b0;
+  }
+
+  .badge-pending {
+    background: #6b5a1a;
+    color: #e0d0a0;
+  }
+
+  .badge-checking {
+    background: #1a3060;
+    color: #8899aa;
+  }
 </style>
 
 <script>
-  import { Keypair, Networks } from "@stellar/stellar-sdk";
+  import { Keypair, Networks, rpc, xdr } from "@stellar/stellar-sdk";
   import { Client } from "factory";
-  import { accountUrl, loadAccounts } from "@g2c/passkey-sdk";
+  import {
+    accountUrl,
+    loadAccounts,
+    loadPendingAccounts,
+    savePendingAccount,
+    activateAccount,
+  } from "@g2c/passkey-sdk";
 
   const FACTORY_CONTRACT_ID = "CC6VKNDN5FBTISOR57XXHIY6L7FSL2KBQHDNRWDEQEAD6G7JODMXWYSO";
   const RPC_URL = "https://soroban-testnet.stellar.org";
   const FRIENDBOT_URL = "https://friendbot.stellar.org";
 
-  const $generateBtn = document.getElementById("generate-btn") as HTMLButtonElement;
-  const $keypairResult = document.getElementById("keypair-result") as HTMLPreElement;
-  const $addressSection = document.getElementById("address-section")!;
+  const $createBtn = document.getElementById("create-btn") as HTMLButtonElement;
+  const $progressInfo = document.getElementById("progress-info")!;
+  const $passkeySection = document.getElementById("passkey-section")!;
   const $cAddressResult = document.getElementById("c-address-result") as HTMLPreElement;
-  const $navSection = document.getElementById("nav-section")!;
-  const $createLink = document.getElementById("create-link") as HTMLAnchorElement;
+  const $setupLink = document.getElementById("setup-link") as HTMLAnchorElement;
   const $errorBox = document.getElementById("error-box")!;
+  const $accountsSection = document.getElementById("accounts-section")!;
+  const $accountsList = document.getElementById("accounts-list")!;
 
   function showError(msg: string) {
     $errorBox.textContent = msg;
@@ -107,45 +152,120 @@ import BaseLayout from "../layouts/BaseLayout.astro";
     $errorBox.style.display = "none";
   }
 
-  // Show previously created accounts
-  const savedAccounts = loadAccounts();
-  if (savedAccounts.length > 0) {
-    const $accountsSection = document.getElementById("accounts-section")!;
-    const $accountsList = document.getElementById("accounts-list")!;
-    $accountsSection.classList.remove("hidden");
+  // --- Check pending accounts against chain and display all accounts ---
 
-    for (const cAddress of savedAccounts) {
-      const li = document.createElement("li");
-      const a = document.createElement("a");
-      a.href = accountUrl(window.location.host, cAddress, "/account/");
-      a.textContent = cAddress;
-      li.appendChild(a);
-      $accountsList.appendChild(li);
+  async function checkContractExists(contractId: string): Promise<boolean> {
+    try {
+      const server = new rpc.Server(RPC_URL);
+      await server.getContractData(contractId, xdr.ScVal.scvLedgerKeyContractInstance());
+      return true;
+    } catch {
+      return false;
     }
   }
 
-  $generateBtn.addEventListener("click", async () => {
+  function addAccountRow(contractId: string, status: "active" | "pending" | "checking") {
+    const li = document.createElement("li");
+    const a = document.createElement("a");
+    const badge = document.createElement("span");
+
+    if (status === "active") {
+      a.href = accountUrl(window.location.host, contractId, "/account/");
+      badge.className = "badge badge-active";
+      badge.textContent = "active";
+    } else if (status === "pending") {
+      const pending = loadPendingAccounts().find((p) => p.contractId === contractId);
+      if (pending) {
+        a.href = accountUrl(window.location.host, contractId, `/new-account/?key=${pending.secretKey}`);
+      } else {
+        a.href = "#";
+      }
+      badge.className = "badge badge-pending";
+      badge.textContent = "pending";
+    } else {
+      a.href = "#";
+      badge.className = "badge badge-checking";
+      badge.textContent = "checking...";
+    }
+
+    a.textContent = `${contractId.slice(0, 8)}...${contractId.slice(-4)}`;
+    a.title = contractId;
+
+    li.dataset.contractId = contractId;
+    li.appendChild(badge);
+    li.appendChild(a);
+    $accountsList.appendChild(li);
+    $accountsSection.classList.remove("hidden");
+  }
+
+  function updateAccountRow(contractId: string, status: "active" | "pending") {
+    const li = $accountsList.querySelector(`li[data-contract-id="${contractId}"]`);
+    if (!li) return;
+
+    const badge = li.querySelector(".badge") as HTMLSpanElement;
+    const a = li.querySelector("a") as HTMLAnchorElement;
+
+    if (status === "active") {
+      badge.className = "badge badge-active";
+      badge.textContent = "active";
+      a.href = accountUrl(window.location.host, contractId, "/account/");
+    } else {
+      badge.className = "badge badge-pending";
+      badge.textContent = "pending";
+      const pending = loadPendingAccounts().find((p) => p.contractId === contractId);
+      if (pending) {
+        a.href = accountUrl(window.location.host, contractId, `/new-account/?key=${pending.secretKey}`);
+      }
+    }
+  }
+
+  // Show active accounts
+  const activeAccounts = loadAccounts();
+  for (const cAddress of activeAccounts) {
+    addAccountRow(cAddress, "active");
+  }
+
+  // Show pending accounts and check them against chain
+  const pendingAccounts = loadPendingAccounts();
+  for (const { contractId } of pendingAccounts) {
+    if (activeAccounts.includes(contractId)) continue;
+    addAccountRow(contractId, "checking");
+  }
+
+  // Check pending accounts in background
+  (async () => {
+    for (const { contractId } of pendingAccounts) {
+      if (activeAccounts.includes(contractId)) continue;
+      const exists = await checkContractExists(contractId);
+      if (exists) {
+        activateAccount(contractId);
+        updateAccountRow(contractId, "active");
+      } else {
+        updateAccountRow(contractId, "pending");
+      }
+    }
+  })();
+
+  // --- Create new account ---
+
+  $createBtn.addEventListener("click", async () => {
     clearError();
-    $generateBtn.disabled = true;
-    $generateBtn.textContent = "Generating...";
+    $createBtn.disabled = true;
+    $createBtn.textContent = "Creating...";
 
     try {
+      $progressInfo.style.display = "block";
+      $progressInfo.textContent = "Generating account...";
+
       const keypair = Keypair.random();
       const publicKey = keypair.publicKey();
       const secret = keypair.secret();
 
-      $keypairResult.style.display = "block";
-      $keypairResult.textContent = `Public: ${publicKey}\nSecret: ${secret}`;
-
-      // Fund via Friendbot
-      $generateBtn.textContent = "Funding via Friendbot...";
+      $progressInfo.textContent = "Funding account on testnet...";
       const res = await fetch(`${FRIENDBOT_URL}?addr=${publicKey}`);
-      if (!res.ok) throw new Error(`Friendbot failed: ${res.status}`);
+      if (!res.ok) throw new Error(`Funding failed: ${res.status}`);
 
-      $keypairResult.textContent += "\n\nFunded on testnet!";
-
-      // Get predicted C-address
-      $generateBtn.textContent = "Predicting C-address...";
+      $progressInfo.textContent = "Predicting smart account address...";
       const client = new Client({
         contractId: FACTORY_CONTRACT_ID,
         networkPassphrase: Networks.TESTNET,
@@ -156,20 +276,24 @@ import BaseLayout from "../layouts/BaseLayout.astro";
       const tx = await client.get_c_address({ funder: publicKey });
       const cAddress = tx.result;
 
-      $addressSection.classList.remove("hidden");
+      // Save as pending
+      savePendingAccount(cAddress, secret);
+
+      $progressInfo.style.display = "none";
       $cAddressResult.textContent = cAddress;
+      $setupLink.href = accountUrl(window.location.host, cAddress, `/new-account/?key=${secret}`);
+      $passkeySection.classList.remove("hidden");
 
-      // Build navigation link
-      const newAccountHref = accountUrl(window.location.host, cAddress, `/new-account/?key=${secret}`);
+      // Also add to accounts list
+      addAccountRow(cAddress, "pending");
 
-      $navSection.classList.remove("hidden");
-      $createLink.href = newAccountHref;
-      $generateBtn.textContent = "Generate & Fund";
-      $generateBtn.disabled = false;
+      $createBtn.textContent = "Create Account";
+      $createBtn.disabled = false;
     } catch (err: any) {
       showError(err.message || String(err));
-      $generateBtn.textContent = "Generate & Fund";
-      $generateBtn.disabled = false;
+      $progressInfo.style.display = "none";
+      $createBtn.textContent = "Create Account";
+      $createBtn.disabled = false;
     }
   });
 </script>

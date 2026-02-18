@@ -30,3 +30,31 @@ export function saveAccount(contractId: string): void {
 export function loadAccounts(): string[] {
   return JSON.parse(localStorage.getItem("g2c:accounts") || "[]");
 }
+
+export interface PendingAccount {
+  contractId: string;
+  secretKey: string;
+}
+
+export function savePendingAccount(contractId: string, secretKey: string): void {
+  const pending: PendingAccount[] = JSON.parse(localStorage.getItem("g2c:pending") || "[]");
+  if (!pending.some((p) => p.contractId === contractId)) {
+    pending.push({ contractId, secretKey });
+    localStorage.setItem("g2c:pending", JSON.stringify(pending));
+  }
+}
+
+export function loadPendingAccounts(): PendingAccount[] {
+  return JSON.parse(localStorage.getItem("g2c:pending") || "[]");
+}
+
+export function removePendingAccount(contractId: string): void {
+  const pending: PendingAccount[] = JSON.parse(localStorage.getItem("g2c:pending") || "[]");
+  const filtered = pending.filter((p) => p.contractId !== contractId);
+  localStorage.setItem("g2c:pending", JSON.stringify(filtered));
+}
+
+export function activateAccount(contractId: string): void {
+  removePendingAccount(contractId);
+  saveAccount(contractId);
+}

@@ -39,9 +39,15 @@ export {
   stripSubdomain,
 } from "./url.js";
 
+export type { PendingAccount } from "./storage.js";
+
 export {
   saveCredential,
   loadCredential,
   saveAccount,
   loadAccounts,
+  savePendingAccount,
+  loadPendingAccounts,
+  removePendingAccount,
+  activateAccount,
 } from "./storage.js";

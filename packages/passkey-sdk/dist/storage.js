@@ -22,4 +22,23 @@ export function saveAccount(contractId) {
 export function loadAccounts() {
     return JSON.parse(localStorage.getItem("g2c:accounts") || "[]");
 }
+export function savePendingAccount(contractId, secretKey) {
+    const pending = JSON.parse(localStorage.getItem("g2c:pending") || "[]");
+    if (!pending.some((p) => p.contractId === contractId)) {
+        pending.push({ contractId, secretKey });
+        localStorage.setItem("g2c:pending", JSON.stringify(pending));
+    }
+}
+export function loadPendingAccounts() {
+    return JSON.parse(localStorage.getItem("g2c:pending") || "[]");
+}
+export function removePendingAccount(contractId) {
+    const pending = JSON.parse(localStorage.getItem("g2c:pending") || "[]");
+    const filtered = pending.filter((p) => p.contractId !== contractId);
+    localStorage.setItem("g2c:pending", JSON.stringify(filtered));
+}
+export function activateAccount(contractId) {
+    removePendingAccount(contractId);
+    saveAccount(contractId);
+}
 //# sourceMappingURL=storage.js.map

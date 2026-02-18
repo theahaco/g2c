@@ -14,6 +14,9 @@ build:
 build-contracts:
     stellar contract build --optimize --profile contract
 
+build-ts:
+    npx tsc -p ./packages/passkey-sdk/tsconfig.json
+
 # Check formatting and clippy
 check:
     cargo fmt --all -- --check
@@ -27,6 +30,11 @@ fmt:
 clean:
     cargo clean
 
-cloudflare-deploy:
-    npx astro build --root /Users/willem/c/s/g2c/packages/frontend
+check-astro:
+    npx astro check --root ./packages/frontend
+
+build-astro:
+    npx astro build --root ./packages/frontend
+
+cloudflare-deploy: build-astro
     npx wrangler pages deploy packages/frontend/dist/ --project-name mysoroban --branch main
