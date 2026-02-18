@@ -2,12 +2,10 @@
 import BaseLayout from "../../layouts/BaseLayout.astro";
 ---
 
-<BaseLayout title="Soroban Passkey Account">
-  <h1>Soroban Passkey</h1>
-  <div id="status-bar">
-    <div>Contract: <code id="contract-id"></code> <a id="explorer-link" class="explorer-link" target="_blank" rel="noopener" style="display:none">View on Stellar Expert</a></div>
-    <div>RP ID: <code id="rp-id"></code></div>
-    <div>Stored key: <code id="stored-key">none</code></div>
+<BaseLayout title="Contract Account Wallet">
+  <div class="page-header">
+    <h1>Contract Account Wallet</h1>
+    <a id="home-link" class="home-btn">Home</a>
   </div>
 
   <div id="error-box" class="error" style="display:none"></div>
@@ -39,10 +37,23 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
   <!-- Home mode UI -->
   <div id="home-mode" class="hidden">
-    <section id="balance-section">
-      <h2>Balance</h2>
-      <div class="balance-display">
-        <span id="xlm-balance">loading...</span>
+    <section id="account-section">
+      <h2>Account</h2>
+      <div class="account-card">
+        <div class="account-field">
+          <span class="account-label">Address</span>
+          <div class="address-row">
+            <code id="contract-id" class="account-address"></code>
+            <button id="copy-btn" class="copy-btn" title="Copy address">Copy</button>
+          </div>
+        </div>
+        <div class="account-field">
+          <span class="account-label">Balance</span>
+          <span id="xlm-balance" class="balance-value">loading...</span>
+        </div>
+        <div class="account-links">
+          <a id="explorer-link" class="explorer-link" target="_blank" rel="noopener" style="display:none">View on Stellar Expert</a>
+        </div>
       </div>
     </section>
 
@@ -59,6 +70,15 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
           <span class="passkey-label">Credential ID</span>
           <code id="passkey-cred-id" class="passkey-value"></code>
         </div>
+        <div class="passkey-field">
+          <span class="passkey-label">RP ID</span>
+          <code id="passkey-rp-id" class="passkey-value"></code>
+        </div>
+        <p class="info rp-explainer">
+          The RP ID (Relying Party Identifier) is the domain that your passkey is bound to.
+          Each smart account gets its own subdomain, so passkeys are scoped per-account
+          and cannot be used to authorize transactions on a different account.
+        </p>
       </div>
     </section>
 
@@ -77,12 +97,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       <p class="info">Set a status message on-chain via your smart account.</p>
       <div class="field">
         <a id="status-message-link" class="button-link">Status Message</a>
-      </div>
-    </section>
-
-    <section id="home-nav-section">
-      <div class="field">
-        <a id="home-link" class="button-link home-link">Home</a>
       </div>
     </section>
 
@@ -107,6 +121,32 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     background: #1a1a2e;
   }
 
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+  .page-header h1 {
+    margin: 0;
+  }
+
+  .home-btn {
+    background: #2a3a4a;
+    color: #e0e0e0;
+    border: 1px solid #3a4a5a;
+    padding: 0.4rem 1rem;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 0.85rem;
+    text-decoration: none;
+    white-space: nowrap;
+  }
+
+  .home-btn:hover {
+    background: #3a4a5a;
+  }
+
   button.primary {
     background: #1a6b3a;
     border-color: #1a8b4a;
@@ -118,23 +158,75 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     background: #1a8b4a;
   }
 
-  #status-bar {
-    background: #0a2040;
-    border: 1px solid #1a3060;
-    border-radius: 4px;
-    padding: 0.5rem 0.75rem;
-    margin: 1rem 0;
-    font-size: 0.85rem;
-  }
-
-  .balance-display {
+  .account-card {
     background: #0a2040;
     border: 1px solid #1a3060;
     border-radius: 6px;
     padding: 1rem;
+  }
+
+  .account-field {
+    margin-bottom: 0.75rem;
+  }
+
+  .account-field:last-of-type {
+    margin-bottom: 0;
+  }
+
+  .account-label {
+    color: #8899aa;
+    display: block;
+    font-size: 0.8rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .address-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .account-address {
+    color: #c0d0e0;
+    word-break: break-all;
+    font-size: 0.85rem;
+  }
+
+  .copy-btn {
+    background: #1a3060;
+    color: #8899aa;
+    border: 1px solid #2a4070;
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .copy-btn:hover {
+    background: #2a4070;
+    color: #c0d0e0;
+  }
+
+  .balance-value {
     font-family: monospace;
-    font-size: 1.5rem;
+    font-size: 1.3rem;
     color: #e0e0e0;
+  }
+
+  .account-links {
+    margin-top: 0.75rem;
+  }
+
+  .explorer-link {
+    color: #5bc0de;
+    text-decoration: underline;
+    font-size: 0.8rem;
+  }
+
+  .explorer-link:hover {
+    color: #7dd4ed;
   }
 
   .signing-request {
@@ -193,16 +285,10 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     font-size: 0.8rem;
   }
 
-
-  .explorer-link {
-    color: #5bc0de;
-    text-decoration: underline;
+  .rp-explainer {
+    margin-top: 0.75rem;
+    margin-bottom: 0;
     font-size: 0.8rem;
-    margin-left: 0.5rem;
-  }
-
-  .explorer-link:hover {
-    color: #7dd4ed;
   }
 
   .button-link {
@@ -219,15 +305,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
   .button-link:hover {
     background: #5a2a7b;
-  }
-
-  .home-link {
-    background: #2a3a4a;
-    border-color: #3a4a5a;
-  }
-
-  .home-link:hover {
-    background: #3a4a5a;
   }
 </style>
 
@@ -359,10 +436,9 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     document.getElementById("error-box")!.style.display = "none";
   }
 
-  function updateStatusBar() {
+  function initAccountCard() {
     document.getElementById("contract-id")!.textContent =
-      contractId || "(visit via <contractId>.<domain>)";
-    document.getElementById("rp-id")!.textContent = rpId;
+      contractId || "(unknown)";
 
     const $explorerLink = document.getElementById("explorer-link") as HTMLAnchorElement;
     if (contractId) {
@@ -370,9 +446,19 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       $explorerLink.style.display = "inline";
     }
 
-    const cred = loadCredential();
-    document.getElementById("stored-key")!.textContent = cred ? cred.publicKey : "none";
-    return cred;
+    // Copy button
+    document.getElementById("copy-btn")!.addEventListener("click", async () => {
+      if (!contractId) return;
+      const btn = document.getElementById("copy-btn") as HTMLButtonElement;
+      try {
+        await navigator.clipboard.writeText(contractId);
+        btn.textContent = "Copied!";
+        setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+      } catch {
+        btn.textContent = "Failed";
+        setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+      }
+    });
   }
 
   // =====================
@@ -409,7 +495,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
         btn.disabled = true;
         btn.textContent = "Waiting for authenticator...";
         await registerPasskey();
-        updateStatusBar();
         document.getElementById("sign-needs-register")!.classList.add("hidden");
         document.getElementById("sign-ready")!.classList.remove("hidden");
       } catch (err: any) {
@@ -423,10 +508,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     // Approve button
     document.getElementById("approve-btn")!.addEventListener("click", async () => {
       clearError();
-      // if (!/^[0-9a-fA-F]{64}$/.test(signHashParam!)) {
-      //   showError("Invalid hash in sign parameter (need 64 hex chars)");
-      //   return;
-      // }
 
       const btn = document.getElementById("approve-btn") as HTMLButtonElement;
       try {
@@ -476,6 +557,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     document.getElementById("register-section")!.classList.add("hidden");
     document.getElementById("passkey-pubkey")!.textContent = cred.publicKey;
     document.getElementById("passkey-cred-id")!.textContent = buf2base64url(cred.credentialId);
+    document.getElementById("passkey-rp-id")!.textContent = rpId;
   }
 
   function initHomeMode() {
@@ -516,7 +598,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
           2
         );
 
-        updateStatusBar();
         $signBtn.disabled = false;
 
         const newCred = loadCredential();
@@ -596,7 +677,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
   // --- Init ---
 
-  updateStatusBar();
+  initAccountCard();
 
   // Set navigation links
   if (contractId) {
