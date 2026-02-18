@@ -92,16 +92,18 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       <pre id="no-key-register-result" style="display:none"></pre>
     </section>
 
-    <section id="dapp-section">
-      <h2>Try dApp</h2>
+    <section id="sign-section">
+      <h2>Try It out</h2>
+      <p class="info">Want to see how it works?
+          Eventually, other stellar dApps will redirect to this domain when you need to sign a transaction.
+          For now you can invoke a contract or sign arbitrary data below.
+     </p>
+      <h3>Invoke a contract</h3>
       <p class="info">Set a status message on-chain via your smart account.</p>
       <div class="field">
         <a id="status-message-link" class="button-link">Status Message</a>
       </div>
-    </section>
-
-    <section id="sign-section">
-      <h2>Sign a Hash</h2>
+      <h3>Sign a Hash</h3>
       <p class="info">Authenticate with your passkey to sign a 32-byte hash (e.g. a transaction hash).</p>
       <div class="field">
         <label for="hash-input">Hash to sign (64 hex chars)</label>
@@ -127,25 +129,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     align-items: center;
   }
 
-  .page-header h1 {
-    margin: 0;
-  }
-
-  .home-btn {
-    background: #2a3a4a;
-    color: #e0e0e0;
-    border: 1px solid #3a4a5a;
-    padding: 0.4rem 1rem;
-    border-radius: 4px;
-    cursor: pointer;
-    font-size: 0.85rem;
-    text-decoration: none;
-    white-space: nowrap;
-  }
-
-  .home-btn:hover {
-    background: #3a4a5a;
-  }
 
   button.primary {
     background: #1a6b3a;
@@ -235,11 +218,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     border-radius: 6px;
     padding: 1rem;
     margin: 1rem 0;
-  }
-
-  .signing-request h2 {
-    margin-top: 0;
-    color: #90d090;
   }
 
   .signing-request .origin {
