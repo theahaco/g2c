@@ -26,12 +26,11 @@ impl Contract {
 
     ///Deploy an account contract and add a passkey to it. Lastly transfer funds to the contract's account.
     ///
-    pub fn create_account(e: &Env, funder: &Address, key: BytesN<65>) -> Address {
+    pub fn create_account(e: &Env, funder: &Address, key: BytesN<65>, amount: &i128) -> Address {
         funder.require_auth();
         let new_account = Self::deploy_account_contract(e, funder, key.to_bytes());
         let xlm_sac = xlm::stellar_asset_client(e);
-        let amount = xlm_sac.balance(funder);
-        xlm_sac.transfer(funder, &new_account, &amount);
+        xlm_sac.transfer(funder, &new_account, amount);
         new_account
     }
 

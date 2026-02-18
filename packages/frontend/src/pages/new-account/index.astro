@@ -97,7 +97,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 </style>
 
 <script>
-  import { Keypair, Networks, TransactionBuilder, Operation, Address, Account, rpc, xdr } from "@stellar/stellar-sdk";
+  import { Keypair, Networks, TransactionBuilder, Operation, Address, Account, rpc, xdr, nativeToScVal } from "@stellar/stellar-sdk";
   import { Buffer } from "buffer";
   import {
     extractPublicKey,
@@ -108,7 +108,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     activateAccount,
   } from "@g2c/passkey-sdk";
 
-  const FACTORY_CONTRACT_ID = "CAJBYUJF3TG7PMZB3RZ3U6QQ3UU3MLWCUDJ6ZVFYSRQGO5TEQD7R3CYV";
+  const FACTORY_CONTRACT_ID = "CB35ARFE6ZRHYOYHOBQ3RNCETNPBEF6EHUZSN7INU6F46QNSSZXPOV6J";
   const RPC_URL = "https://soroban-testnet.stellar.org";
 
   // --- State ---
@@ -252,6 +252,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
             args: [
               Address.fromString(keypair.publicKey()).toScVal(),
               xdr.ScVal.scvBytes(Buffer.from(passkeyPublicKey)),
+              nativeToScVal(99_850_000_000_000n, { type: "i128" }),
             ],
           })
         )

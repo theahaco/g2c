@@ -9,8 +9,8 @@ export * as rpc from "@stellar/stellar-sdk/rpc";
  */
 export interface SimpleThresholdAccountParams {
     /**
-   * The minimum number of signers required for authorization.
-   */
+     * The minimum number of signers required for authorization.
+     */
     threshold: u32;
 }
 /**
@@ -54,13 +54,13 @@ export type SimpleThresholdStorageKey = {
  */
 export interface SpendingLimitAccountParams {
     /**
-   * The period in ledgers over which the spending limit applies.
-   */
+     * The period in ledgers over which the spending limit applies.
+     */
     period_ledgers: u32;
     /**
-   * The maximum amount that can be spent within the specified period (in
-   * stroops).
-   */
+     * The maximum amount that can be spent within the specified period (in
+     * stroops).
+     */
     spending_limit: i128;
 }
 /**
@@ -68,20 +68,20 @@ export interface SpendingLimitAccountParams {
  */
 export interface SpendingLimitData {
     /**
-   * Cached total of all amounts in spending_history.
-   */
+     * Cached total of all amounts in spending_history.
+     */
     cached_total_spent: i128;
     /**
-   * The period in ledgers over which the spending limit applies.
-   */
+     * The period in ledgers over which the spending limit applies.
+     */
     period_ledgers: u32;
     /**
-   * History of spending transactions with their ledger sequences.
-   */
+     * History of spending transactions with their ledger sequences.
+     */
     spending_history: Array<SpendingEntry>;
     /**
-   * The spending limit for the period.
-   */
+     * The spending limit for the period.
+     */
     spending_limit: i128;
 }
 /**
@@ -89,12 +89,12 @@ export interface SpendingLimitData {
  */
 export interface SpendingEntry {
     /**
-   * The amount spent in this transaction.
-   */
+     * The amount spent in this transaction.
+     */
     amount: i128;
     /**
-   * The ledger sequence when this transaction occurred.
-   */
+     * The ledger sequence when this transaction occurred.
+     */
     ledger_sequence: u32;
 }
 /**
@@ -150,12 +150,12 @@ export type SpendingLimitStorageKey = {
  */
 export interface WeightedThresholdAccountParams {
     /**
-   * Mapping of signers to their respective weights.
-   */
+     * Mapping of signers to their respective weights.
+     */
     signer_weights: Map<Signer, u32>;
     /**
-   * The minimum total weight required for authorization.
-   */
+     * The minimum total weight required for authorization.
+     */
     threshold: u32;
 }
 /**
@@ -257,16 +257,16 @@ export type ContextRuleType = {
  */
 export interface Meta {
     /**
-   * The type of context this rule applies to.
-   */
+     * The type of context this rule applies to.
+     */
     context_type: ContextRuleType;
     /**
-   * Human-readable name for the context rule.
-   */
+     * Human-readable name for the context rule.
+     */
     name: string;
     /**
-   * Optional expiration ledger sequence for the rule.
-   */
+     * Optional expiration ledger sequence for the rule.
+     */
     valid_until: Option<u32>;
 }
 /**
@@ -274,28 +274,28 @@ export interface Meta {
  */
 export interface ContextRule {
     /**
-   * The type of context this rule applies to.
-   */
+     * The type of context this rule applies to.
+     */
     context_type: ContextRuleType;
     /**
-   * Unique identifier for the context rule.
-   */
+     * Unique identifier for the context rule.
+     */
     id: u32;
     /**
-   * Human-readable name for the context rule.
-   */
+     * Human-readable name for the context rule.
+     */
     name: string;
     /**
-   * List of policy contracts that must be satisfied.
-   */
+     * List of policy contracts that must be satisfied.
+     */
     policies: Array<string>;
     /**
-   * List of signers authorized by this rule.
-   */
+     * List of signers authorized by this rule.
+     */
     signers: Array<Signer>;
     /**
-   * Optional expiration ledger sequence for the rule.
-   */
+     * Optional expiration ledger sequence for the rule.
+     */
     valid_until: Option<u32>;
 }
 /**
@@ -449,16 +449,16 @@ export declare const WebAuthnError: {
  */
 export interface WebAuthnSigData {
     /**
-   * Raw authenticator data from the WebAuthn response.
-   */
+     * Raw authenticator data from the WebAuthn response.
+     */
     authenticator_data: Buffer;
     /**
-   * Raw client data JSON from the WebAuthn response.
-   */
+     * Raw client data JSON from the WebAuthn response.
+     */
     client_data: Buffer;
     /**
-   * The cryptographic signature (64 bytes for secp256r1).
-   */
+     * The cryptographic signature (64 bytes for secp256r1).
+     */
     signature: Buffer;
 }
 export interface Client {
