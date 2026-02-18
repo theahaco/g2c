@@ -79,11 +79,11 @@ const { title } = Astro.props;
   }
 
   // In-app WebView detection
-  // On iOS, real Safari always includes "Safari" in the UA.
-  // In-app browsers (Twitter, Instagram, Facebook, etc.) use WebKit but omit "Safari".
+  // Real Safari / SFSafariViewController always include both "Safari" and "Version/" in the UA.
+  // WKWebViews (Twitter, Instagram, etc.) omit "Version/" even if they add "Safari".
   const ua = navigator.userAgent;
   const isIOS = /iPhone|iPad|iPod/.test(ua);
-  const isInAppBrowser = (isIOS && !/Safari/.test(ua))
+  const isInAppBrowser = (isIOS && (!/Safari/.test(ua) || !/Version\//.test(ua)))
     || /Twitter|Instagram|FBAN|FBAV|Line\//.test(ua)
     || !window.PublicKeyCredential;
 
