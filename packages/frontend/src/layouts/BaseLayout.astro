@@ -79,7 +79,15 @@ const { title } = Astro.props;
   }
 
   // In-app WebView detection
-  if (!window.PublicKeyCredential) {
+  // On iOS, real Safari always includes "Safari" in the UA.
+  // In-app browsers (Twitter, Instagram, Facebook, etc.) use WebKit but omit "Safari".
+  const ua = navigator.userAgent;
+  const isIOS = /iPhone|iPad|iPod/.test(ua);
+  const isInAppBrowser = (isIOS && !/Safari/.test(ua))
+    || /Twitter|Instagram|FBAN|FBAV|Line\//.test(ua)
+    || !window.PublicKeyCredential;
+
+  if (isInAppBrowser) {
     document.getElementById("webview-warning")!.style.display = "block";
   }
 </script>
