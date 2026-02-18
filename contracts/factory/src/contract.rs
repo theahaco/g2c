@@ -4,6 +4,8 @@ use soroban_sdk::{
 use soroban_sdk_tools::{contractstorage, InstanceItem};
 use stellar_accounts::smart_account::Signer;
 
+use crate::xlm;
+
 const ACCOUNT_HASH: &[u8; 32] = b"\xb9\x4b\x29\x9f\x8c\x53\x04\xf1\x63\xdf\x15\x2e\x0d\xcf\x1a\xb8\x06\x63\xed\x03\x7c\xa1\xa3\x85\xd4\xec\x7b\xee\x7f\x3e\xcc\xf3";
 const VERIFIER: &[u8; 32] = b"\xb9\x39\x33\x11\xf9\x7b\x49\x8f\xbb\x89\x76\xec\x50\xdd\x85\x85\xdd\x99\xad\x44\x3b\x8f\x13\xec\x5f\x75\x19\x86\x72\x9f\x99\xbe";
 
@@ -18,11 +20,18 @@ pub struct Contract;
 
 #[contractimpl]
 impl Contract {
+    pub fn __constructor(e: &Env) {
+        xlm::register(e, &e.current_contract_address());
+    }
+
     ///Deploy an account contract and add a passkey to it. Lastly transfer funds to the contract's account.
     ///
-    pub fn create_account(e: &Env, funder: &Address, key: BytesN<65>) -> Address {
+    pub fn create_account(e: &Env, funder: &Address, key: BytesN<65>, amount: &i128) -> Address {
         funder.require_auth();
-        Self::deploy_account_contract(e, funder, key.to_bytes())
+        let new_account = Self::deploy_account_contract(e, funder, key.to_bytes());
+        let xlm_sac = xlm::stellar_asset_client(e);
+        xlm_sac.transfer(funder, &new_account, amount);
+        new_account
     }
 
     pub fn get_c_address(e: &Env, funder: &Address) -> Address {

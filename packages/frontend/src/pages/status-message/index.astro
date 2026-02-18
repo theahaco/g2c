@@ -3,8 +3,14 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 ---
 
 <BaseLayout title="Status Message">
-  <h1>Status Message</h1>
-  <p class="info">Set a status message on-chain via your smart account.</p>
+    <div class="page-header">
+        <div>
+        <h1>Status Message</h1>
+        <p class="info">Set a status message on-chain via your smart account.</p>
+        </div>
+        <a href="/" class="home-btn">Home</a>
+    </div>
+
 
   <div id="error-box" class="error" style="display:none"></div>
 
@@ -27,13 +33,15 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   <!-- Set new message -->
   <section>
     <h2>2. Set Message</h2>
+    <form id="set-form">
     <div class="field">
       <label for="message-input">New message</label>
-      <input id="message-input" placeholder="Hello, Soroban!" />
+      <input id="message-input" placeholder="Hello Passkeys!" />
     </div>
     <div class="field">
-      <button id="set-btn" class="primary">Set Message</button>
+      <button  class="primary"> Set Message</button>
     </div>
+    </form>
   </section>
 
   <!-- Result (shown after redirect back) -->
@@ -104,7 +112,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
   const RPC_URL = "https://soroban-testnet.stellar.org";
   const STATUS_CONTRACT = networks.testnet.contractId;
-  const FACTORY_CONTRACT_ID = "CC6VKNDN5FBTISOR57XXHIY6L7FSL2KBQHDNRWDEQEAD6G7JODMXWYSO";
+  const FACTORY_CONTRACT_ID = "CDDMELYHOSD6M2T53F5DUYCXDS3VVOQ72E4KZMMZP37GQWII2WRKM2CC";
 
   // WebAuthn verifier WASM hash (from factory contract source)
   const VERIFIER_WASM_HASH = Buffer.from([
@@ -122,7 +130,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   const $currentMessage = document.getElementById("current-message")!;
   const $messageValue = document.getElementById("message-value")!;
   const $messageInput = document.getElementById("message-input") as HTMLInputElement;
-  const $setBtn = document.getElementById("set-btn") as HTMLButtonElement;
+  const $setForm = document.getElementById("set-form") as HTMLButtonElement;
   const $resultSection = document.getElementById("result-section")!;
   const $statusValue = document.getElementById("status-value")!;
   const $txLink = document.getElementById("tx-link") as HTMLAnchorElement;
@@ -204,7 +212,8 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
   // --- Set message ---
 
-  $setBtn.addEventListener("click", async () => {
+  $setForm.addEventListener("submit", async (e) => {
+    e.preventDefault();
     clearError();
     const contract = $contractInput.value.trim();
     const message = $messageInput.value.trim();
@@ -219,8 +228,8 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     }
 
     try {
-      $setBtn.disabled = true;
-      $setBtn.textContent = "Building transaction...";
+      $setForm.disabled = true;
+      $setForm.textContent = "Building transaction...";
 
       const keypair = await keypairReady;
       const client = new Client({
@@ -254,8 +263,8 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       window.location.href = signUrl;
     } catch (err: any) {
       showError(`Failed to build transaction: ${err.message}`);
-      $setBtn.disabled = false;
-      $setBtn.textContent = "Set Message";
+      $setForm.disabled = false;
+      $setForm.textContent = "Set Message";
     }
   });
 

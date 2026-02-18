@@ -2,18 +2,25 @@
 import BaseLayout from "../../layouts/BaseLayout.astro";
 ---
 
-<BaseLayout title="G2C — New Account">
-  <h1>New Smart Account</h1>
+<BaseLayout title="G2C — Set Up Passkey">
+  <h1>Set Up Your Account</h1>
+  <p class="info">
+    Register a passkey to secure your smart account, then deploy it on-chain.
+    Your passkey (fingerprint, face, or security key) will be the only way to authorize transactions.
+  </p>
+
   <div id="status-bar">
-    <div>Contract: <code id="contract-id"></code></div>
-    <div>RP ID: <code id="rp-id"></code></div>
+    <div>Account: <code id="contract-id"></code></div>
   </div>
 
   <div id="error-box" class="error" style="display:none"></div>
 
   <section>
     <h2>1. Register Passkey</h2>
-    <p class="info">Creates a new passkey bound to this account's subdomain.</p>
+    <p class="info">
+      Your browser will prompt you to create a passkey.
+      This passkey is bound to your account and will be used to sign all future transactions.
+    </p>
     <div class="field">
       <button id="register-btn">Register Passkey</button>
     </div>
@@ -21,8 +28,8 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   </section>
 
   <section id="deploy-section" class="hidden">
-    <h2>2. Deploy Smart Account</h2>
-    <p class="info">Deploys the smart account on-chain with your passkey.</p>
+    <h2>2. Deploy Account</h2>
+    <p class="info">Publish your passkey-secured smart account to the Stellar network.</p>
     <div class="field">
       <button id="deploy-btn" class="primary">Deploy Account</button>
     </div>
@@ -30,8 +37,8 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   </section>
 
   <section id="done-section" class="hidden">
-    <h2>Account Created</h2>
-    <p class="info">Your smart account is deployed and ready to use.</p>
+    <h2>Account Ready</h2>
+    <p class="info">Your smart account is live. Use your passkey to sign transactions.</p>
     <div class="field">
       <a id="account-link" class="button-link">Go to Account</a>
     </div>
@@ -90,7 +97,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 </style>
 
 <script>
-  import { Keypair, Networks, TransactionBuilder, Operation, Address, Account, rpc, xdr } from "@stellar/stellar-sdk";
+  import { Keypair, Networks, TransactionBuilder, Operation, Address, Account, rpc, xdr, nativeToScVal } from "@stellar/stellar-sdk";
   import { Buffer } from "buffer";
   import {
     extractPublicKey,
@@ -98,10 +105,10 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     buf2base64url,
     contractIdFromHostname,
     saveCredential as sdkSaveCredential,
-    saveAccount,
+    activateAccount,
   } from "@g2c/passkey-sdk";
 
-  const FACTORY_CONTRACT_ID = "CC6VKNDN5FBTISOR57XXHIY6L7FSL2KBQHDNRWDEQEAD6G7JODMXWYSO";
+  const FACTORY_CONTRACT_ID = "CDDMELYHOSD6M2T53F5DUYCXDS3VVOQ72E4KZMMZP37GQWII2WRKM2CC";
   const RPC_URL = "https://soroban-testnet.stellar.org";
 
   // --- State ---
@@ -119,7 +126,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   // --- UI refs ---
 
   const $contractIdEl = document.getElementById("contract-id")!;
-  const $rpIdEl = document.getElementById("rp-id")!;
   const $errorBox = document.getElementById("error-box")!;
   const $registerBtn = document.getElementById("register-btn") as HTMLButtonElement;
   const $registerResult = document.getElementById("register-result") as HTMLPreElement;
@@ -142,15 +148,14 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
   // --- Init status bar ---
 
-  $contractIdEl.textContent = contractId || "(visit via <contractId>.<domain>)";
-  $rpIdEl.textContent = rpId;
+  $contractIdEl.textContent = contractId || "(unknown)";
 
   if (!contractId) {
-    showError("Navigate to <contractId>.<domain>/new-account/ to use this page.");
+    showError("Invalid URL. Please start from the home page.");
   }
 
   if (!secretKey) {
-    showError("Missing ?key= parameter. Start from the root page.");
+    showError("Missing setup data. Please start from the home page.");
   }
 
   // --- Register Passkey ---
@@ -172,11 +177,11 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       const credential = (await navigator.credentials.create({
         publicKey: {
           challenge: crypto.getRandomValues(new Uint8Array(32)),
-          rp: { name: `Soroban ${contractId.slice(0, 8)}...`, id: rpId },
+          rp: { name: `Soroban ${contractId}`, id: rpId },
           user: {
             id: userId,
             name: contractId,
-            displayName: `Account ${contractId.slice(0, 8)}...${contractId.slice(-4)}`,
+            displayName: `Account ${contractId}`,
           },
           pubKeyCredParams: [{ alg: -7, type: "public-key" }],
           authenticatorSelection: {
@@ -245,6 +250,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
             args: [
               Address.fromString(keypair.publicKey()).toScVal(),
               xdr.ScVal.scvBytes(Buffer.from(passkeyPublicKey)),
+              nativeToScVal(1_000_000_0 * 9998, { type: "i128" }),
             ],
           })
         )
@@ -275,10 +281,10 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
         throw new Error(`Transaction failed: ${getResponse.status}`);
       }
 
-      saveAccount(contractId!);
+      activateAccount(contractId!);
 
       $deployResult.style.display = "block";
-      $deployResult.innerHTML = `Account deployed!\nC-address: <a href="https://stellar.expert/explorer/testnet/contract/${contractId}" target="_blank" rel="noopener">${contractId}</a>`;
+      $deployResult.innerHTML = `Account deployed!\n<a href="https://stellar.expert/explorer/testnet/contract/${contractId}" target="_blank" rel="noopener">View on Stellar Expert</a>`;
 
       // Show link to account page
       const protocol = window.location.protocol;

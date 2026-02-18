@@ -58,4 +58,4 @@ frontend/              # Wallet web app
 
 ## License
 
-MIT
+Apache

@@ -12,17 +12,6 @@ body {
   color: #e0e0e0;
 }
 
-h1 {
-  margin-bottom: 0.5rem;
-  color: #fff;
-}
-
-h2 {
-  margin: 1.5rem 0 0.5rem;
-  color: #ccc;
-  font-size: 1.1rem;
-}
-
 code {
   background: #16213e;
   padding: 0.15rem 0.4rem;
@@ -101,4 +90,26 @@ section {
 
 .hidden {
   display: none;
+}
+
+.home-btn {
+  background: #2a3a4a;
+  color: #e0e0e0;
+  border: 1px solid #3a4a5a;
+  padding: 0.4rem 1rem;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 0.85rem;
+  text-decoration: none;
+  white-space: nowrap;
+}
+
+.home-btn:hover {
+  background: #3a4a5a;
+}
+
+.page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }

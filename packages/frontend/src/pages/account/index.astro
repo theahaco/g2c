@@ -2,12 +2,10 @@
 import BaseLayout from "../../layouts/BaseLayout.astro";
 ---
 
-<BaseLayout title="Soroban Passkey Account">
-  <h1>Soroban Passkey</h1>
-  <div id="status-bar">
-    <div>Contract: <code id="contract-id"></code> <a id="explorer-link" class="explorer-link" target="_blank" rel="noopener" style="display:none">View on Stellar Expert</a></div>
-    <div>RP ID: <code id="rp-id"></code></div>
-    <div>Stored key: <code id="stored-key">none</code></div>
+<BaseLayout title="Contract Account Wallet">
+  <div class="page-header">
+    <h1>Contract Account Wallet</h1>
+    <a id="home-link" class="home-btn">Home</a>
   </div>
 
   <div id="error-box" class="error" style="display:none"></div>
@@ -39,6 +37,26 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
   <!-- Home mode UI -->
   <div id="home-mode" class="hidden">
+    <section id="account-section">
+      <h2>Account</h2>
+      <div class="account-card">
+        <div class="account-field">
+          <span class="account-label">Address</span>
+          <div class="address-row">
+            <code id="contract-id" class="account-address"></code>
+            <button id="copy-btn" class="copy-btn" title="Copy address">Copy</button>
+          </div>
+        </div>
+        <div class="account-field">
+          <span class="account-label">Balance</span>
+          <span id="xlm-balance" class="balance-value">loading...</span>
+        </div>
+        <div class="account-links">
+          <a id="explorer-link" class="explorer-link" target="_blank" rel="noopener" style="display:none">View on Stellar Expert</a>
+        </div>
+      </div>
+    </section>
+
     <!-- Shown when a passkey is already registered -->
     <section id="passkey-info-section" class="hidden">
       <h2>Passkey</h2>
@@ -52,15 +70,16 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
           <span class="passkey-label">Credential ID</span>
           <code id="passkey-cred-id" class="passkey-value"></code>
         </div>
-      </div>
-      <details style="margin-top:0.75rem">
-        <summary class="reregister-summary">Re-register Passkey</summary>
-        <p class="info" style="margin-top:0.5rem">Replace the locally stored passkey credential. Note: this does not change the on-chain signer.</p>
-        <div class="field">
-          <button id="reregister-btn">Re-register</button>
+        <div class="passkey-field">
+          <span class="passkey-label">RP ID</span>
+          <code id="passkey-rp-id" class="passkey-value"></code>
         </div>
-      </details>
-      <pre id="register-result" style="display:none"></pre>
+        <p class="info rp-explainer">
+          The RP ID (Relying Party Identifier) is the domain that your passkey is bound to.
+          Each smart account gets its own subdomain, so passkeys are scoped per-account
+          and cannot be used to authorize transactions on a different account.
+        </p>
+      </div>
     </section>
 
     <!-- Shown when no passkey is registered -->
@@ -73,16 +92,18 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       <pre id="no-key-register-result" style="display:none"></pre>
     </section>
 
-    <section id="dapp-section">
-      <h2>Try dApp</h2>
+    <section id="sign-section">
+      <h2>Try It out</h2>
+      <p class="info">Want to see how it works?
+          Eventually, other stellar dApps will redirect to this domain when you need to sign a transaction.
+          For now you can invoke a contract or sign arbitrary data below.
+     </p>
+      <h3>Invoke a contract</h3>
       <p class="info">Set a status message on-chain via your smart account.</p>
       <div class="field">
         <a id="status-message-link" class="button-link">Status Message</a>
       </div>
-    </section>
-
-    <section id="sign-section">
-      <h2>Sign a Hash</h2>
+      <h3>Sign a Hash</h3>
       <p class="info">Authenticate with your passkey to sign a 32-byte hash (e.g. a transaction hash).</p>
       <div class="field">
         <label for="hash-input">Hash to sign (64 hex chars)</label>
@@ -102,6 +123,13 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     background: #1a1a2e;
   }
 
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+  }
+
+
   button.primary {
     background: #1a6b3a;
     border-color: #1a8b4a;
@@ -113,13 +141,75 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     background: #1a8b4a;
   }
 
-  #status-bar {
+  .account-card {
     background: #0a2040;
     border: 1px solid #1a3060;
-    border-radius: 4px;
-    padding: 0.5rem 0.75rem;
-    margin: 1rem 0;
+    border-radius: 6px;
+    padding: 1rem;
+  }
+
+  .account-field {
+    margin-bottom: 0.75rem;
+  }
+
+  .account-field:last-of-type {
+    margin-bottom: 0;
+  }
+
+  .account-label {
+    color: #8899aa;
+    display: block;
+    font-size: 0.8rem;
+    margin-bottom: 0.25rem;
+  }
+
+  .address-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
+
+  .account-address {
+    color: #c0d0e0;
+    word-break: break-all;
     font-size: 0.85rem;
+  }
+
+  .copy-btn {
+    background: #1a3060;
+    color: #8899aa;
+    border: 1px solid #2a4070;
+    padding: 0.2rem 0.5rem;
+    border-radius: 3px;
+    cursor: pointer;
+    font-size: 0.75rem;
+    white-space: nowrap;
+    flex-shrink: 0;
+  }
+
+  .copy-btn:hover {
+    background: #2a4070;
+    color: #c0d0e0;
+  }
+
+  .balance-value {
+    font-family: monospace;
+    font-size: 1.3rem;
+    color: #e0e0e0;
+  }
+
+  .account-links {
+    margin-top: 0.75rem;
+  }
+
+  .explorer-link {
+    color: #5bc0de;
+    text-decoration: underline;
+    font-size: 0.8rem;
+  }
+
+  .explorer-link:hover {
+    color: #7dd4ed;
   }
 
   .signing-request {
@@ -128,11 +218,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     border-radius: 6px;
     padding: 1rem;
     margin: 1rem 0;
-  }
-
-  .signing-request h2 {
-    margin-top: 0;
-    color: #90d090;
   }
 
   .signing-request .origin {
@@ -178,25 +263,10 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     font-size: 0.8rem;
   }
 
-  .reregister-summary {
-    color: #8899aa;
-    cursor: pointer;
-    font-size: 0.85rem;
-  }
-
-  .reregister-summary:hover {
-    color: #c0d0e0;
-  }
-
-  .explorer-link {
-    color: #5bc0de;
-    text-decoration: underline;
+  .rp-explainer {
+    margin-top: 0.75rem;
+    margin-bottom: 0;
     font-size: 0.8rem;
-    margin-left: 0.5rem;
-  }
-
-  .explorer-link:hover {
-    color: #7dd4ed;
   }
 
   .button-link {
@@ -218,6 +288,16 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
 <script>
   import {
+    Asset,
+    Networks,
+    Address,
+    Contract,
+    TransactionBuilder,
+    Account,
+    rpc,
+    scValToNative,
+  } from "@stellar/stellar-sdk";
+  import {
     extractPublicKey,
     derToCompact,
     buf2hex,
@@ -229,6 +309,8 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     loadCredential as sdkLoadCredential,
   } from "@g2c/passkey-sdk";
   import { formatSignResult } from "../../lib/formatting";
+
+  const RPC_URL = "https://soroban-testnet.stellar.org";
 
   // --- State ---
 
@@ -260,11 +342,11 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     const credential = (await navigator.credentials.create({
       publicKey: {
         challenge: crypto.getRandomValues(new Uint8Array(32)),
-        rp: { name: `Soroban ${contractId.slice(0, 8)}...`, id: rpId },
+        rp: { name: `Soroban ${contractId}`, id: rpId },
         user: {
           id: userId,
           name: contractId,
-          displayName: `Account ${contractId.slice(0, 8)}...${contractId.slice(-4)}`,
+          displayName: `Account ${contractId}`,
         },
         pubKeyCredParams: [{ alg: -7, type: "public-key" }],
         authenticatorSelection: {
@@ -332,10 +414,9 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     document.getElementById("error-box")!.style.display = "none";
   }
 
-  function updateStatusBar() {
+  function initAccountCard() {
     document.getElementById("contract-id")!.textContent =
-      contractId || "(visit via <contractId>.<domain>)";
-    document.getElementById("rp-id")!.textContent = rpId;
+      contractId || "(unknown)";
 
     const $explorerLink = document.getElementById("explorer-link") as HTMLAnchorElement;
     if (contractId) {
@@ -343,9 +424,19 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       $explorerLink.style.display = "inline";
     }
 
-    const cred = loadCredential();
-    document.getElementById("stored-key")!.textContent = cred ? cred.publicKey : "none";
-    return cred;
+    // Copy button
+    document.getElementById("copy-btn")!.addEventListener("click", async () => {
+      if (!contractId) return;
+      const btn = document.getElementById("copy-btn") as HTMLButtonElement;
+      try {
+        await navigator.clipboard.writeText(contractId);
+        btn.textContent = "Copied!";
+        setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+      } catch {
+        btn.textContent = "Failed";
+        setTimeout(() => { btn.textContent = "Copy"; }, 1500);
+      }
+    });
   }
 
   // =====================
@@ -382,7 +473,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
         btn.disabled = true;
         btn.textContent = "Waiting for authenticator...";
         await registerPasskey();
-        updateStatusBar();
         document.getElementById("sign-needs-register")!.classList.add("hidden");
         document.getElementById("sign-ready")!.classList.remove("hidden");
       } catch (err: any) {
@@ -396,10 +486,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     // Approve button
     document.getElementById("approve-btn")!.addEventListener("click", async () => {
       clearError();
-      // if (!/^[0-9a-fA-F]{64}$/.test(signHashParam!)) {
-      //   showError("Invalid hash in sign parameter (need 64 hex chars)");
-      //   return;
-      // }
 
       const btn = document.getElementById("approve-btn") as HTMLButtonElement;
       try {
@@ -449,6 +535,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     document.getElementById("register-section")!.classList.add("hidden");
     document.getElementById("passkey-pubkey")!.textContent = cred.publicKey;
     document.getElementById("passkey-cred-id")!.textContent = buf2base64url(cred.credentialId);
+    document.getElementById("passkey-rp-id")!.textContent = rpId;
   }
 
   function initHomeMode() {
@@ -467,17 +554,19 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       document.getElementById("register-section")!.classList.remove("hidden");
     }
 
-    // Re-register (when passkey already exists)
-    async function handleRegister(btn: HTMLButtonElement, resultEl: HTMLPreElement) {
+    // Register passkey (when none exists yet)
+    const $registerBtn = document.getElementById("register-btn") as HTMLButtonElement;
+    const $noKeyRegisterResult = document.getElementById("no-key-register-result") as HTMLPreElement;
+    $registerBtn.addEventListener("click", async () => {
       clearError();
       try {
-        btn.disabled = true;
-        btn.textContent = "Waiting for authenticator...";
+        $registerBtn.disabled = true;
+        $registerBtn.textContent = "Waiting for authenticator...";
 
         const { credentialId, publicKey } = await registerPasskey();
 
-        resultEl.style.display = "block";
-        resultEl.textContent = JSON.stringify(
+        $noKeyRegisterResult.style.display = "block";
+        $noKeyRegisterResult.textContent = JSON.stringify(
           {
             credentialId: buf2base64url(credentialId),
             publicKey: buf2hex(publicKey),
@@ -487,27 +576,17 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
           2
         );
 
-        updateStatusBar();
         $signBtn.disabled = false;
 
-        // Switch to info view
         const newCred = loadCredential();
         if (newCred) showPasskeyInfo(newCred);
       } catch (err: any) {
         showError(`Registration failed: ${err.message}`);
       } finally {
-        btn.disabled = false;
-        btn.textContent = btn.id === "reregister-btn" ? "Re-register" : "Register Passkey";
+        $registerBtn.disabled = false;
+        $registerBtn.textContent = "Register Passkey";
       }
-    }
-
-    const $reregisterBtn = document.getElementById("reregister-btn") as HTMLButtonElement;
-    const $registerResult = document.getElementById("register-result") as HTMLPreElement;
-    $reregisterBtn.addEventListener("click", () => handleRegister($reregisterBtn, $registerResult));
-
-    const $registerBtn = document.getElementById("register-btn") as HTMLButtonElement;
-    const $noKeyRegisterResult = document.getElementById("no-key-register-result") as HTMLPreElement;
-    $registerBtn.addEventListener("click", () => handleRegister($registerBtn, $noKeyRegisterResult));
+    });
 
     // Sign
     $signBtn.addEventListener("click", async () => {
@@ -541,20 +620,66 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     });
   }
 
+  // --- Balance ---
+
+  async function fetchXlmBalance(contractAddress: string): Promise<string> {
+    const server = new rpc.Server(RPC_URL);
+    const xlmSacId = Asset.native().contractId(Networks.TESTNET);
+    const xlmContract = new Contract(xlmSacId);
+
+    const dummySource = new Account(
+      "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+      "0"
+    );
+
+    const tx = new TransactionBuilder(dummySource, {
+      fee: "100",
+      networkPassphrase: Networks.TESTNET,
+    })
+      .addOperation(
+        xlmContract.call("balance", Address.fromString(contractAddress).toScVal())
+      )
+      .setTimeout(0)
+      .build();
+
+    const sim = await server.simulateTransaction(tx);
+    if (rpc.Api.isSimulationError(sim)) return "0";
+
+    const successSim = sim as rpc.Api.SimulateTransactionSuccessResponse;
+    if (!successSim.result) return "0";
+
+    const rawBalance = scValToNative(successSim.result.retval) as bigint;
+    const xlm = Number(rawBalance) / 10_000_000;
+    return xlm.toFixed(7);
+  }
+
   // --- Init ---
 
-  updateStatusBar();
+  initAccountCard();
 
-  // Set dApp link
+  // Set navigation links
   if (contractId) {
     const rootHost = stripSubdomain(window.location.host);
     const $statusMessageLink = document.getElementById("status-message-link") as HTMLAnchorElement;
     $statusMessageLink.href = `//${rootHost}/status-message/?contract=${contractId}`;
+    const $homeLink = document.getElementById("home-link") as HTMLAnchorElement;
+    $homeLink.href = `//${rootHost}/`;
   }
 
   if (isSigningMode) {
     initSigningMode();
   } else {
     initHomeMode();
+  }
+
+  // Fetch balance in background
+  if (contractId) {
+    fetchXlmBalance(contractId).then((balance) => {
+      document.getElementById("xlm-balance")!.textContent = `${balance} XLM`;
+    }).catch(() => {
+      document.getElementById("xlm-balance")!.textContent = "unavailable";
+    });
+  } else {
+    document.getElementById("xlm-balance")!.textContent = "—";
   }
 </script>

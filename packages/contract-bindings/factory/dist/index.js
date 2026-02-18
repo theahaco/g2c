@@ -26,7 +26,7 @@ export const SimpleThresholdError = {
     /**
      * The context rule for the smart account has been already installed.
      */
-    3203: { message: "AlreadyInstalled" }
+    3203: { message: "AlreadyInstalled" },
 };
 /**
  * Error codes for spending limit policy operations.
@@ -55,7 +55,7 @@ export const SpendingLimitError = {
     /**
      * The context rule for the smart account has been already installed.
      */
-    3225: { message: "AlreadyInstalled" }
+    3225: { message: "AlreadyInstalled" },
 };
 /**
  * Error codes for weighted threshold policy operations.
@@ -80,7 +80,7 @@ export const WeightedThresholdError = {
     /**
      * The context rule for the smart account has been already installed.
      */
-    3214: { message: "AlreadyInstalled" }
+    3214: { message: "AlreadyInstalled" },
 };
 /**
  * Error codes for smart account operations.
@@ -137,7 +137,7 @@ export const SmartAccountError = {
     /**
      * Too many context rules in the smart account.
      */
-    3012: { message: "TooManyContextRules" }
+    3012: { message: "TooManyContextRules" },
 };
 /**
  * Error types for WebAuthn verification operations.
@@ -178,7 +178,7 @@ export const WebAuthnError = {
     /**
      * Invalid relationship between Backup Eligibility and State bits.
      */
-    3118: { message: "BackupEligibilityAndStateNotSet" }
+    3118: { message: "BackupEligibilityAndStateNotSet" },
 };
 export class Client extends ContractClient {
     options;
@@ -188,7 +188,9 @@ export class Client extends ContractClient {
         return ContractClient.deploy(null, options);
     }
     constructor(options) {
-        super(new ContractSpec(["AAAAAAAAAGVEZXBsb3kgYW4gYWNjb3VudCBjb250cmFjdCBhbmQgYWRkIGEgcGFzc2tleSB0byBpdC4gTGFzdGx5IHRyYW5zZmVyIGZ1bmRzIHRvIHRoZSBjb250cmFjdCdzIGFjY291bnQuCgAAAAAAAA5jcmVhdGVfYWNjb3VudAAAAAAAAgAAAAAAAAAGZnVuZGVyAAAAAAATAAAAAAAAAANrZXkAAAAD7gAAAEEAAAABAAAAEw==",
+        super(new ContractSpec([
+            "AAAAAAAAAAAAAAANX19jb25zdHJ1Y3RvcgAAAAAAAAAAAAAA",
+            "AAAAAAAAAGVEZXBsb3kgYW4gYWNjb3VudCBjb250cmFjdCBhbmQgYWRkIGEgcGFzc2tleSB0byBpdC4gTGFzdGx5IHRyYW5zZmVyIGZ1bmRzIHRvIHRoZSBjb250cmFjdCdzIGFjY291bnQuCgAAAAAAAA5jcmVhdGVfYWNjb3VudAAAAAAAAwAAAAAAAAAGZnVuZGVyAAAAAAATAAAAAAAAAANrZXkAAAAD7gAAAEEAAAAAAAAABmFtb3VudAAAAAAACwAAAAEAAAAT",
             "AAAAAAAAAAAAAAANZ2V0X2NfYWRkcmVzcwAAAAAAAAEAAAAAAAAABmZ1bmRlcgAAAAAAEwAAAAEAAAAT",
             "AAAABQAAADlFdmVudCBlbWl0dGVkIHdoZW4gYSBzaW1wbGUgdGhyZXNob2xkIHBvbGljeSBpcyBlbmZvcmNlZC4AAAAAAAAAAAAAFFNpbXBsZVBvbGljeUVuZm9yY2VkAAAAAQAAABZzaW1wbGVfcG9saWN5X2VuZm9yY2VkAAAAAAAEAAAAAAAAAA1zbWFydF9hY2NvdW50AAAAAAAAEwAAAAEAAAAAAAAAB2NvbnRleHQAAAAH0AAAAAdDb250ZXh0AAAAAAAAAAAAAAAAD2NvbnRleHRfcnVsZV9pZAAAAAAEAAAAAAAAAAAAAAAVYXV0aGVudGljYXRlZF9zaWduZXJzAAAAAAAD6gAAB9AAAAAGU2lnbmVyAAAAAAAAAAAAAg==",
             "AAAAAQAAADhJbnN0YWxsYXRpb24gcGFyYW1ldGVycyBmb3IgdGhlIHNpbXBsZSB0aHJlc2hvbGQgcG9saWN5LgAAAAAAAAAcU2ltcGxlVGhyZXNob2xkQWNjb3VudFBhcmFtcwAAAAEAAAA5VGhlIG1pbmltdW0gbnVtYmVyIG9mIHNpZ25lcnMgcmVxdWlyZWQgZm9yIGF1dGhvcml6YXRpb24uAAAAAAAACXRocmVzaG9sZAAAAAAAAAQ=",
@@ -219,11 +221,12 @@ export class Client extends ContractClient {
             "AAAABQAAADdFdmVudCBlbWl0dGVkIHdoZW4gYSBwb2xpY3kgaXMgYWRkZWQgdG8gYSBjb250ZXh0IHJ1bGUuAAAAAAAAAAALUG9saWN5QWRkZWQAAAAAAQAAAAxwb2xpY3lfYWRkZWQAAAADAAAAAAAAAA9jb250ZXh0X3J1bGVfaWQAAAAABAAAAAEAAAAAAAAABnBvbGljeQAAAAAAEwAAAAAAAAAAAAAADWluc3RhbGxfcGFyYW0AAAAAAAAAAAAAAAAAAAI=",
             "AAAABQAAADtFdmVudCBlbWl0dGVkIHdoZW4gYSBwb2xpY3kgaXMgcmVtb3ZlZCBmcm9tIGEgY29udGV4dCBydWxlLgAAAAAAAAAADVBvbGljeVJlbW92ZWQAAAAAAAABAAAADnBvbGljeV9yZW1vdmVkAAAAAAACAAAAAAAAAA9jb250ZXh0X3J1bGVfaWQAAAAABAAAAAEAAAAAAAAABnBvbGljeQAAAAAAEwAAAAAAAAAC",
             "AAAABAAAADFFcnJvciB0eXBlcyBmb3IgV2ViQXV0aG4gdmVyaWZpY2F0aW9uIG9wZXJhdGlvbnMuAAAAAAAAAAAAAA1XZWJBdXRobkVycm9yAAAAAAAACQAAADlUaGUgc2lnbmF0dXJlIHBheWxvYWQgaXMgaW52YWxpZCBvciBoYXMgaW5jb3JyZWN0IGZvcm1hdC4AAAAAAAAXU2lnbmF0dXJlUGF5bG9hZEludmFsaWQAAAAMJgAAADNUaGUgY2xpZW50IGRhdGEgZXhjZWVkcyB0aGUgbWF4aW11bSBhbGxvd2VkIGxlbmd0aC4AAAAAEUNsaWVudERhdGFUb29Mb25nAAAAAAAMJwAAACZGYWlsZWQgdG8gcGFyc2UgSlNPTiBmcm9tIGNsaWVudCBkYXRhLgAAAAAADkpzb25QYXJzZUVycm9yAAAAAAwoAAAANFRoZSB0eXBlIGZpZWxkIGluIGNsaWVudCBkYXRhIGlzIG5vdCAid2ViYXV0aG4uZ2V0Ii4AAAAQVHlwZUZpZWxkSW52YWxpZAAADCkAAAA7VGhlIGNoYWxsZW5nZSBpbiBjbGllbnQgZGF0YSBkb2VzIG5vdCBtYXRjaCBleHBlY3RlZCB2YWx1ZS4AAAAAEENoYWxsZW5nZUludmFsaWQAAAwqAAAANlRoZSBhdXRoZW50aWNhdG9yIGRhdGEgZm9ybWF0IGlzIGludmFsaWQgb3IgdG9vIHNob3J0LgAAAAAAFUF1dGhEYXRhRm9ybWF0SW52YWxpZAAAAAAADCsAAAA8VGhlIFVzZXIgUHJlc2VudCAoVVApIGJpdCBpcyBub3Qgc2V0IGluIGF1dGhlbnRpY2F0b3IgZmxhZ3MuAAAAEFByZXNlbnRCaXROb3RTZXQAAAwsAAAAPVRoZSBVc2VyIFZlcmlmaWVkIChVVikgYml0IGlzIG5vdCBzZXQgaW4gYXV0aGVudGljYXRvciBmbGFncy4AAAAAAAARVmVyaWZpZWRCaXROb3RTZXQAAAAAAAwtAAAAP0ludmFsaWQgcmVsYXRpb25zaGlwIGJldHdlZW4gQmFja3VwIEVsaWdpYmlsaXR5IGFuZCBTdGF0ZSBiaXRzLgAAAAAfQmFja3VwRWxpZ2liaWxpdHlBbmRTdGF0ZU5vdFNldAAAAAwu",
-            "AAAAAQAAAMhXZWJBdXRobiBzaWduYXR1cmUgZGF0YSBzdHJ1Y3R1cmUgY29udGFpbmluZyBhbGwgY29tcG9uZW50cyBuZWVkZWQgZm9yCnZlcmlmaWNhdGlvbi4KClRoaXMgc3RydWN0dXJlIGVuY2Fwc3VsYXRlcyB0aGUgc2lnbmF0dXJlIGFuZCBhc3NvY2lhdGVkIGRhdGEgZ2VuZXJhdGVkCmR1cmluZyBhIFdlYkF1dGhuIGF1dGhlbnRpY2F0aW9uIGNlcmVtb255LgAAAAAAAAAPV2ViQXV0aG5TaWdEYXRhAAAAAAMAAAAyUmF3IGF1dGhlbnRpY2F0b3IgZGF0YSBmcm9tIHRoZSBXZWJBdXRobiByZXNwb25zZS4AAAAAABJhdXRoZW50aWNhdG9yX2RhdGEAAAAAAA4AAAAwUmF3IGNsaWVudCBkYXRhIEpTT04gZnJvbSB0aGUgV2ViQXV0aG4gcmVzcG9uc2UuAAAAC2NsaWVudF9kYXRhAAAAAA4AAAA1VGhlIGNyeXB0b2dyYXBoaWMgc2lnbmF0dXJlICg2NCBieXRlcyBmb3Igc2VjcDI1NnIxKS4AAAAAAAAJc2lnbmF0dXJlAAAAAAAD7gAAAEA="]), options);
+            "AAAAAQAAAMhXZWJBdXRobiBzaWduYXR1cmUgZGF0YSBzdHJ1Y3R1cmUgY29udGFpbmluZyBhbGwgY29tcG9uZW50cyBuZWVkZWQgZm9yCnZlcmlmaWNhdGlvbi4KClRoaXMgc3RydWN0dXJlIGVuY2Fwc3VsYXRlcyB0aGUgc2lnbmF0dXJlIGFuZCBhc3NvY2lhdGVkIGRhdGEgZ2VuZXJhdGVkCmR1cmluZyBhIFdlYkF1dGhuIGF1dGhlbnRpY2F0aW9uIGNlcmVtb255LgAAAAAAAAAPV2ViQXV0aG5TaWdEYXRhAAAAAAMAAAAyUmF3IGF1dGhlbnRpY2F0b3IgZGF0YSBmcm9tIHRoZSBXZWJBdXRobiByZXNwb25zZS4AAAAAABJhdXRoZW50aWNhdG9yX2RhdGEAAAAAAA4AAAAwUmF3IGNsaWVudCBkYXRhIEpTT04gZnJvbSB0aGUgV2ViQXV0aG4gcmVzcG9uc2UuAAAAC2NsaWVudF9kYXRhAAAAAA4AAAA1VGhlIGNyeXB0b2dyYXBoaWMgc2lnbmF0dXJlICg2NCBieXRlcyBmb3Igc2VjcDI1NnIxKS4AAAAAAAAJc2lnbmF0dXJlAAAAAAAD7gAAAEA=",
+        ]), options);
         this.options = options;
     }
     fromJSON = {
         create_account: (this.txFromJSON),
-        get_c_address: (this.txFromJSON)
+        get_c_address: (this.txFromJSON),
     };
 }
