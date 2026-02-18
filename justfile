@@ -38,3 +38,6 @@ build-astro:
 
 cloudflare-deploy: build-astro
     npx wrangler pages deploy packages/frontend/dist/ --project-name mysoroban --branch main
+
+dev: build-ts
+    (cd packages/frontend; npm run dev)
