@@ -96,13 +96,10 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 
   .account-address {
     font-family: monospace;
-    font-size: 0.9rem;
+    font-size: 0.72rem;
     color: #e0e0e0;
     flex: 1;
     min-width: 0;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
   }
 
   .account-arrow {
@@ -154,7 +151,7 @@ import BaseLayout from "../layouts/BaseLayout.astro";
 
     const addr = document.createElement("span");
     addr.className = "account-address";
-    addr.textContent = `${contractId.slice(0, 8)}...${contractId.slice(-8)}`;
+    addr.textContent = contractId;
     addr.title = contractId;
 
     const arrow = document.createElement("span");

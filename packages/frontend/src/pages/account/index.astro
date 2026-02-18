@@ -342,11 +342,11 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     const credential = (await navigator.credentials.create({
       publicKey: {
         challenge: crypto.getRandomValues(new Uint8Array(32)),
-        rp: { name: `Soroban ${contractId.slice(0, 8)}...`, id: rpId },
+        rp: { name: `Soroban ${contractId}`, id: rpId },
         user: {
           id: userId,
           name: contractId,
-          displayName: `Account ${contractId.slice(0, 8)}...${contractId.slice(-4)}`,
+          displayName: `Account ${contractId}`,
         },
         pubKeyCredParams: [{ alg: -7, type: "public-key" }],
         authenticatorSelection: {
