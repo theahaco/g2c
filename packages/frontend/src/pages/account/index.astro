@@ -53,14 +53,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
           <code id="passkey-cred-id" class="passkey-value"></code>
         </div>
       </div>
-      <details style="margin-top:0.75rem">
-        <summary class="reregister-summary">Re-register Passkey</summary>
-        <p class="info" style="margin-top:0.5rem">Replace the locally stored passkey credential. Note: this does not change the on-chain signer.</p>
-        <div class="field">
-          <button id="reregister-btn">Re-register</button>
-        </div>
-      </details>
-      <pre id="register-result" style="display:none"></pre>
     </section>
 
     <!-- Shown when no passkey is registered -->
@@ -184,15 +176,6 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     font-size: 0.8rem;
   }
 
-  .reregister-summary {
-    color: #8899aa;
-    cursor: pointer;
-    font-size: 0.85rem;
-  }
-
-  .reregister-summary:hover {
-    color: #c0d0e0;
-  }
 
   .explorer-link {
     color: #5bc0de;
@@ -482,17 +465,19 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
       document.getElementById("register-section")!.classList.remove("hidden");
     }
 
-    // Re-register (when passkey already exists)
-    async function handleRegister(btn: HTMLButtonElement, resultEl: HTMLPreElement) {
+    // Register passkey (when none exists yet)
+    const $registerBtn = document.getElementById("register-btn") as HTMLButtonElement;
+    const $noKeyRegisterResult = document.getElementById("no-key-register-result") as HTMLPreElement;
+    $registerBtn.addEventListener("click", async () => {
       clearError();
       try {
-        btn.disabled = true;
-        btn.textContent = "Waiting for authenticator...";
+        $registerBtn.disabled = true;
+        $registerBtn.textContent = "Waiting for authenticator...";
 
         const { credentialId, publicKey } = await registerPasskey();
 
-        resultEl.style.display = "block";
-        resultEl.textContent = JSON.stringify(
+        $noKeyRegisterResult.style.display = "block";
+        $noKeyRegisterResult.textContent = JSON.stringify(
           {
             credentialId: buf2base64url(credentialId),
             publicKey: buf2hex(publicKey),
@@ -505,24 +490,15 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
         updateStatusBar();
         $signBtn.disabled = false;
 
-        // Switch to info view
         const newCred = loadCredential();
         if (newCred) showPasskeyInfo(newCred);
       } catch (err: any) {
         showError(`Registration failed: ${err.message}`);
       } finally {
-        btn.disabled = false;
-        btn.textContent = btn.id === "reregister-btn" ? "Re-register" : "Register Passkey";
+        $registerBtn.disabled = false;
+        $registerBtn.textContent = "Register Passkey";
       }
-    }
-
-    const $reregisterBtn = document.getElementById("reregister-btn") as HTMLButtonElement;
-    const $registerResult = document.getElementById("register-result") as HTMLPreElement;
-    $reregisterBtn.addEventListener("click", () => handleRegister($reregisterBtn, $registerResult));
-
-    const $registerBtn = document.getElementById("register-btn") as HTMLButtonElement;
-    const $noKeyRegisterResult = document.getElementById("no-key-register-result") as HTMLPreElement;
-    $registerBtn.addEventListener("click", () => handleRegister($registerBtn, $noKeyRegisterResult));
+    });
 
     // Sign
     $signBtn.addEventListener("click", async () => {
