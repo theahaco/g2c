@@ -6,6 +6,7 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
   <h1>Soroban Passkey</h1>
   <div id="status-bar">
     <div>Contract: <code id="contract-id"></code> <a id="explorer-link" class="explorer-link" target="_blank" rel="noopener" style="display:none">View on Stellar Expert</a></div>
+    <div>Balance: <code id="xlm-balance">loading...</code></div>
     <div>RP ID: <code id="rp-id"></code></div>
     <div>Stored key: <code id="stored-key">none</code></div>
   </div>
@@ -216,6 +217,16 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
 
 <script>
   import {
+    Asset,
+    Networks,
+    Address,
+    Contract,
+    TransactionBuilder,
+    Account,
+    rpc,
+    scValToNative,
+  } from "@stellar/stellar-sdk";
+  import {
     extractPublicKey,
     derToCompact,
     buf2hex,
@@ -227,6 +238,8 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     loadCredential as sdkLoadCredential,
   } from "@g2c/passkey-sdk";
   import { formatSignResult } from "../../lib/formatting";
+
+  const RPC_URL = "https://soroban-testnet.stellar.org";
 
   // --- State ---
 
@@ -532,6 +545,39 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     });
   }
 
+  // --- Balance ---
+
+  async function fetchXlmBalance(contractAddress: string): Promise<string> {
+    const server = new rpc.Server(RPC_URL);
+    const xlmSacId = Asset.native().contractId(Networks.TESTNET);
+    const xlmContract = new Contract(xlmSacId);
+
+    const dummySource = new Account(
+      "GAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAWHF",
+      "0"
+    );
+
+    const tx = new TransactionBuilder(dummySource, {
+      fee: "100",
+      networkPassphrase: Networks.TESTNET,
+    })
+      .addOperation(
+        xlmContract.call("balance", Address.fromString(contractAddress).toScVal())
+      )
+      .setTimeout(0)
+      .build();
+
+    const sim = await server.simulateTransaction(tx);
+    if (rpc.Api.isSimulationError(sim)) return "0";
+
+    const successSim = sim as rpc.Api.SimulateTransactionSuccessResponse;
+    if (!successSim.result) return "0";
+
+    const rawBalance = scValToNative(successSim.result.retval) as bigint;
+    const xlm = Number(rawBalance) / 10_000_000;
+    return xlm.toFixed(7);
+  }
+
   // --- Init ---
 
   updateStatusBar();
@@ -549,5 +595,16 @@ import BaseLayout from "../../layouts/BaseLayout.astro";
     initSigningMode();
   } else {
     initHomeMode();
+  }
+
+  // Fetch balance in background
+  if (contractId) {
+    fetchXlmBalance(contractId).then((balance) => {
+      document.getElementById("xlm-balance")!.textContent = `${balance} XLM`;
+    }).catch(() => {
+      document.getElementById("xlm-balance")!.textContent = "unavailable";
+    });
+  } else {
+    document.getElementById("xlm-balance")!.textContent = "—";
   }
 </script>

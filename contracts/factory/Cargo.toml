@@ -13,6 +13,7 @@ doctest = false
 soroban-sdk = { workspace = true }
 stellar-accounts = { workspace = true }
 soroban-sdk-tools = { git = "https://github.com/BlaineHeffron/soroban-sdk-tools", rev = "8ac57cfea5695a2d777f3dd87634959e0eb1f9f2" }
+stellar-registry.workspace = true
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils"] }
