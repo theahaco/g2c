@@ -63,8 +63,9 @@ function previewPrefix(host) {
         return sub.slice(sepIndex + PREVIEW_SEP.length);
     }
     // Bare preview root: "pr-10"
-    if (/^pr-\d+$/.test(sub)) {
-        return sub;
+    const prMatch = sub.match(/^pr-(\d+)$/);
+    if (prMatch) {
+        return prMatch[1];
     }
     return null;
 }
