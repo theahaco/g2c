@@ -15,6 +15,10 @@ const { title } = Astro.props;
   </head>
   <body>
     <a id="preview-banner" style="display:none" target="_blank" rel="noopener"></a>
+    <div id="webview-warning" style="display:none">
+      <p>Passkeys are not supported in in-app browsers.</p>
+      <p>Tap the menu (<strong>&middot;&middot;&middot;</strong>) and choose <strong>"Open in Safari"</strong> or <strong>"Open in Browser"</strong>.</p>
+    </div>
     <slot />
   </body>
 </html>
@@ -45,9 +49,25 @@ const { title } = Astro.props;
   body:has(#preview-banner[style*="display: block"]) {
     padding-top: 2.2rem;
   }
+
+  #webview-warning {
+    background: #78350f;
+    border: 1px solid #a16207;
+    border-radius: 6px;
+    color: #fef3c7;
+    padding: 0.75rem 1rem;
+    margin-bottom: 1rem;
+    font-size: 0.9rem;
+    line-height: 1.5;
+  }
+
+  #webview-warning p {
+    margin: 0.25rem 0;
+  }
 </style>
 
 <script>
+  // Preview banner
   const sub = window.location.hostname.split(".")[0];
   const match = sub.match(/(?:--)?pr-(\d+)$/);
   if (match) {
@@ -56,5 +76,18 @@ const { title } = Astro.props;
     banner.textContent = `Preview PR #${prNum}`;
     banner.href = `https://github.com/theahaco/g2c/pull/${prNum}`;
     banner.style.display = "block";
+  }
+
+  // In-app WebView detection
+  // Real Safari / SFSafariViewController always include both "Safari" and "Version/" in the UA.
+  // WKWebViews (Twitter, Instagram, etc.) omit "Version/" even if they add "Safari".
+  const ua = navigator.userAgent;
+  const isIOS = /iPhone|iPad|iPod/.test(ua);
+  const isInAppBrowser = (isIOS && (!/Safari/.test(ua) || !/Version\//.test(ua)))
+    || /Twitter|Instagram|FBAN|FBAV|Line\//.test(ua)
+    || !window.PublicKeyCredential;
+
+  if (isInAppBrowser) {
+    document.getElementById("webview-warning")!.style.display = "block";
   }
 </script>
