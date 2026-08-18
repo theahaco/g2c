@@ -7,10 +7,10 @@
 //   4 Nido makes it human          (connect a real account)
 //   5 perch: describe · prove · enforce (the payoff — live on testnet)
 import { Keypair } from '@stellar/stellar-sdk';
-import { reachableCalls, isNarrowing, docHash } from '@nidohq/testkit';
+import { reachableCalls, isNarrowing, docHash, type PolicyDoc } from '@nidohq/testkit';
 import type { Fn, InvokeOutcome } from './perchOnchain.js';
 import { fundedFeeSource, invokeBoardCall } from './perchOnchain.js';
-import { ciDoc, OVERBROAD, SCOPED, SIGNERS, RULES, type SignerView, type RuleView, type PolicyKind } from './policyModel.js';
+import { buildDoc, DEFAULT_BUILD, BOARD_FUNCTIONS, SIGNERS, RULES, type SignerView, type RuleView, type PolicyKind, type BuildConfig } from './policyModel.js';
 import { CONTRACTS, explorerContract, explorerTx } from './config.js';
 import type { xdr } from '@stellar/stellar-sdk';
 
@@ -25,7 +25,7 @@ const STEPS = [
 const state = {
   step: 1,
   connected: false,
-  attnFns: [...OVERBROAD] as string[],
+  build: { functions: [...DEFAULT_BUILD.functions], selfArg: DEFAULT_BUILD.selfArg, notAfterLedger: DEFAULT_BUILD.notAfterLedger } as BuildConfig,
   attnMsg: null as { ok: boolean; text: string } | null,
   feeKp: null as Keypair | null,
   busy: false,
@@ -41,6 +41,27 @@ const el = <K extends keyof HTMLElementTagNameMap>(t: K, cls?: string, html?: st
 };
 const short = (a: string) => (a.length > 16 ? `${a.slice(0, 8)}…${a.slice(-6)}` : a);
 const G_EXAMPLE = 'GBX...RELEASEBOT'; // illustrative
+
+// Render a JSON value as indented, syntax-highlighted HTML for a `.codebox`.
+// Long C-address strings are shortened for readability (the doc_hash below is
+// over the real canonical bytes, so shortening here is purely cosmetic).
+const esc = (s: string) => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+function hjson(v: unknown, indent = 0): string {
+  const pad = '  '.repeat(indent);
+  const pad1 = '  '.repeat(indent + 1);
+  if (v === null) return '<span class="b">null</span>';
+  if (typeof v === 'number' || typeof v === 'boolean') return `<span class="b">${v}</span>`;
+  if (typeof v === 'string') { const t = v.length > 30 ? short(v) : v; return `<span class="s">"${esc(t)}"</span>`; }
+  if (Array.isArray(v)) {
+    if (v.length === 0) return '[]';
+    return `[\n${v.map((x) => pad1 + hjson(x, indent + 1)).join(',\n')}\n${pad}]`;
+  }
+  const o = v as Record<string, unknown>;
+  const keys = Object.keys(o);
+  if (keys.length === 0) return '{}';
+  const body = keys.map((k) => `${pad1}<span class="k">"${esc(k)}"</span>: ${hjson(o[k], indent + 1)}`).join(',\n');
+  return `{\n${body}\n${pad}}`;
+}
 
 function go(step: number): void { state.step = step; render(); }
 
@@ -234,8 +255,7 @@ function act4(): HTMLElement {
 }
 
 // ---------- Act 5 ----------
-function reachRows(fns: string[]): HTMLElement {
-  const doc = ciDoc(fns);
+function reachRows(doc: PolicyDoc): HTMLElement {
   const reach = reachableCalls(doc);
   const wrap = el('div');
   for (const rs of reach) {
@@ -243,7 +263,8 @@ function reachRows(fns: string[]): HTMLElement {
     row.append(el('span', 'chip', rs.rule));
     row.append(el('span', 'arw', '→'));
     row.append(el('span', 'chip acc', rs.scope === 'self-admin' ? 'self-admin' : short(rs.scope)));
-    if (rs.functions.kind === 'any') row.append(el('span', 'chip', 'any function'));
+    // "any function" is the broad, dangerous reach — flag it red.
+    if (rs.functions.kind === 'any') row.append(el('span', 'chip bad', 'any function'));
     else for (const f of rs.functions.functions) row.append(el('span', 'chip good', `${f}()`));
     wrap.append(row);
   }
@@ -275,9 +296,96 @@ function ruleCard(r: RuleView): HTMLElement {
   const reach = el('div', 'reach'); reach.innerHTML = `reaches <b>${r.reach}</b>`; c.append(reach);
   return c;
 }
+// ---------- Act 5 · the policy builder ----------
+/** A toggle chip (checkbox affordance) that flips a boolean and re-renders. */
+function toggle(on: boolean, label: string, onFlip: () => void, danger = false): HTMLElement {
+  const b = el('button', `tog${on ? ' on' : ''}${on && danger ? ' risk' : ''}`);
+  b.type = 'button';
+  b.innerHTML = `<span class="box">${on ? '✓' : ''}</span>${label}`;
+  b.addEventListener('click', () => { onFlip(); state.attnMsg = null; render(); });
+  return b;
+}
+
+/** Left half of the builder: author the CI key's single rule. */
+function builderControls(): HTMLElement {
+  const c = el('div', 'card stack');
+  c.append(el('h3', undefined, '① Build the policy'));
+  c.append(el('p', 'sub', 'A perch policy is <b>data you author</b>, not a contract you deploy. Toggle the grant — every change re-derives the wire document, its <span class="mono">doc_hash</span>, and exactly what the key can reach.'));
+
+  // Signer + scope are fixed for the CI story — shown as context, not editable.
+  const ctx = el('div', 'stack');
+  const r1 = el('div', 'rrow'); r1.append(el('span', 'rk', 'signer'), el('span', 'chip', 'CI key'), el('span', 'note2', 'the secp256r1 release key')); ctx.append(r1);
+  const r2 = el('div', 'rrow'); r2.append(el('span', 'rk', 'scope'), el('span', 'chip acc', short(CONTRACTS.board)), el('span', 'note2', 'the status board contract')); ctx.append(r2);
+  c.append(ctx);
+
+  const label = (t: string): HTMLElement => { const l = el('div', 'section-label'); l.style.marginTop = '.8rem'; l.textContent = t; return l; };
+
+  c.append(label('Functions it may call'));
+  const fns = el('div', 'toggles');
+  for (const f of BOARD_FUNCTIONS) {
+    fns.append(toggle(state.build.functions.includes(f.name), `${f.name}()`, () => {
+      const set = new Set(state.build.functions);
+      if (set.has(f.name)) set.delete(f.name); else set.add(f.name);
+      state.build.functions = BOARD_FUNCTIONS.map((x) => x.name).filter((n) => set.has(n));
+    }, f.risky));
+  }
+  c.append(fns);
+
+  c.append(label('Argument guard'));
+  const ag = el('div', 'toggles');
+  ag.append(toggle(state.build.selfArg, 'author = self · args[1]', () => { state.build.selfArg = !state.build.selfArg; }));
+  c.append(ag);
+
+  c.append(label('Expiry'));
+  const expOn = state.build.notAfterLedger != null;
+  const ex = el('div', 'toggles');
+  ex.append(toggle(expOn, 'expires at a ledger', () => { state.build.notAfterLedger = expOn ? null : 60_000_000; }));
+  c.append(ex);
+  if (expOn) {
+    const fld = el('div', 'fld'); fld.style.marginTop = '.5rem';
+    fld.append(el('label', undefined, 'not-after-ledger'));
+    const inp = el('input', 'input') as HTMLInputElement;
+    inp.type = 'number'; inp.min = '1'; inp.value = String(state.build.notAfterLedger ?? 60_000_000); inp.id = 'expiry';
+    inp.addEventListener('change', () => { const n = parseInt(inp.value, 10); state.build.notAfterLedger = Number.isFinite(n) && n > 0 ? n : null; render(); });
+    fld.append(inp);
+    c.append(fld);
+  }
+  return c;
+}
+
+/** Dynamic safety read of the current build — the "is this a good grant?" voice. */
+function safetyAlerts(): HTMLElement | null {
+  const b = state.build;
+  const wrap = el('div', 'stack');
+  const push = (kind: string, html: string) => { const a = el('div', `alert ${kind}`); a.innerHTML = html; wrap.append(a); };
+  if (b.functions.length === 0)
+    push('danger', '<span class="ic">▲</span><span>No function selected — the rule <b>omits</b> <span class="mono">functions</span>, which means <b>any</b> function on the board. Broader, not narrower. Pick at least <span class="mono">post</span>.</span>');
+  else if (b.functions.includes('clear'))
+    push('warn', '<span class="ic">▲</span><span>Over-broad — the key can also <span class="mono">clear()</span> (wipe history). Narrow to publish-only below.</span>');
+  if (!b.selfArg)
+    push('warn', '<span class="ic">▲</span><span>Any author — without <span class="mono">args[1] = self</span> the key can post <i>as anyone</i>. Turn the self-guard on.</span>');
+  if (b.functions.length === 1 && b.functions[0] === 'post' && b.selfArg)
+    push('good', '<span class="ic">✓</span><span>Tightly scoped — <span class="mono">post()</span> only, author = self. This is the grant the chain enforces in ③.</span>');
+  return wrap.childElementCount ? wrap : null;
+}
+
+/** Right half of the builder: the live PolicyDoc, its hash, and its reach. */
+function policyOutput(): HTMLElement {
+  const doc = buildDoc(state.build);
+  const c = el('div', 'card stack');
+  c.append(el('h3', undefined, 'The policy, as data'));
+  c.append(el('p', 'sub', 'The exact PolicyDoc — kebab-case wire shape. What a reviewer reads, and what the <span class="mono">doc_hash</span> commits to.'));
+  const box = el('div', 'codebox'); box.innerHTML = hjson(doc); c.append(box);
+  const dh = el('div', 'addr'); dh.style.marginTop = '.7rem'; dh.id = 'doc-hash'; dh.textContent = `doc_hash ${docHash(doc)}`; c.append(dh);
+  const l = el('div', 'section-label'); l.style.marginTop = '.7rem'; l.textContent = 'Reachable calls — everything the key can touch'; c.append(l);
+  c.append(reachRows(doc));
+  const sa = safetyAlerts(); if (sa) c.append(sa);
+  return c;
+}
+
 function act5(): HTMLElement {
   const a = el('div', 'act');
-  a.append(actHead('perch', '<i>Describe</i> the policy. Prove it\'s safe. Watch it enforce.',
+  a.append(actHead('perch', '<i>Build</i> the policy. Prove it\'s safe. Watch it enforce.',
     'perch is a policy you write as <b>data</b>, compiled to one tiny interpreter that\'s audited once. No per-account Rust. And the same <span class="mono">doc_hash</span> you review is the program the chain runs.'));
 
   // full policy view — perch composed with OZ-native policies
@@ -289,44 +397,29 @@ function act5(): HTMLElement {
   pol.append(rl);
   a.append(pol);
 
-  // 5a describe
-  const d1 = el('div', 'card stack');
-  d1.append(el('h3', undefined, '① Describe it — and see the scope'));
-  d1.append(el('p', 'sub', 'A PolicyDoc, not a contract. Reachable-calls shows exactly what the CI key can touch.'));
-  const doc = ciDoc(state.attnFns);
-  const jsonView = el('div', 'codebox');
-  jsonView.innerHTML = [
-    '{ <span class="k">"signer"</span>: <span class="s">"ci"</span>, <span class="k">"scope"</span>: <span class="s">"board"</span>,',
-    `  <span class="k">"functions"</span>: [${state.attnFns.map((f) => `<span class="s">"${f}"</span>`).join(', ')}],`,
-    '  <span class="k">"args"</span>: [{ <span class="k">"index"</span>: 1, <span class="k">"is"</span>: <span class="s">"self"</span> }] }',
-  ].join('\n');
-  d1.append(jsonView);
-  d1.append(el('div', 'section-label', 'Reachable calls'));
-  d1.append(reachRows(state.attnFns));
-  const dh = el('div', 'addr'); dh.style.marginTop = '.7rem'; dh.textContent = `doc_hash ${docHash(doc)}`;
-  d1.append(dh);
-  if (state.attnFns.length > 1) {
-    const warn = el('div', 'alert warn'); warn.innerHTML = '<span class="ic">▲</span><span>This grant is <b>too broad</b> — CI can also <span class="mono">clear</span> (wipe history). Let\'s narrow it.</span>';
-    d1.append(warn);
-  }
-  a.append(d1);
+  // ① build it — the interactive policy builder (controls + live document)
+  const build = el('div', 'grid2 stack');
+  build.append(builderControls(), policyOutput());
+  a.append(build);
 
-  // 5b attenuate
+  // ② attenuate — narrowing accepted, widening refused, machine-checked over
+  //    whatever the builder currently holds.
   const d2 = el('div', 'card stack');
-  d2.append(el('h3', undefined, '② Narrow it — safely'));
-  d2.append(el('p', 'sub', 'Attenuation is a machine-checked subset: perch accepts a narrowing and refuses a widening.'));
+  d2.append(el('h3', undefined, '② Prove it only narrows'));
+  d2.append(el('p', 'sub', 'Attenuation is a machine-checked subset: perch accepts a narrowing and refuses a widening — reachable(child) ⊆ reachable(parent), read straight off the compiled programs.'));
+  const isPublishOnly = state.build.functions.length === 1 && state.build.functions[0] === 'post';
   const btns = el('div'); btns.style.display = 'flex'; btns.style.gap = '.6rem'; btns.style.flexWrap = 'wrap';
   const narrow = el('button', 'btn sm acc', 'Narrow → publish-only'); narrow.type = 'button'; narrow.id = 'narrow';
-  narrow.disabled = state.attnFns.length <= 1;
+  narrow.disabled = isPublishOnly;
   narrow.addEventListener('click', () => {
-    const check = isNarrowing(ciDoc(state.attnFns), ciDoc(SCOPED));
-    if (check.ok) { state.attnFns = [...SCOPED]; state.attnMsg = { ok: true, text: 'Verified narrowing — reachable(child) ⊆ reachable(parent). doc_hash updated.' }; }
+    const check = isNarrowing(buildDoc(state.build), buildDoc({ ...state.build, functions: ['post'] }));
+    if (check.ok) { state.build.functions = ['post']; state.attnMsg = { ok: true, text: 'Verified narrowing — reachable(child) ⊆ reachable(parent). doc_hash updated.' }; }
     else state.attnMsg = { ok: false, text: check.reason ?? 'refused' };
     render();
   });
   const widen = el('button', 'btn sm ghost', 'Try to widen → add set_admin'); widen.type = 'button'; widen.id = 'widen';
   widen.addEventListener('click', () => {
-    const check = isNarrowing(ciDoc(state.attnFns), ciDoc([...state.attnFns, 'set_admin']));
+    const check = isNarrowing(buildDoc(state.build), buildDoc({ ...state.build, functions: [...state.build.functions, 'set_admin'] }));
     state.attnMsg = check.ok ? { ok: true, text: 'widened' } : { ok: false, text: `Refused — not a narrowing. ${check.reason ?? 'adds set_admin()'}. The grant is unchanged.` };
     render();
   });

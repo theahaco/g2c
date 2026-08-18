@@ -39,6 +39,15 @@ test('perch tour: five acts, attenuation, and live on-chain enforce', async ({ p
   await expect(page.getByText(/full policy/i)).toBeVisible(); // the composed multi-rule view
   await expect(page.getByText('perch interpreter').first()).toBeVisible();
 
+  // ① the policy builder is live: the default grant is over-broad, and toggling
+  //    clear() off re-derives the document + safety read to "tightly scoped".
+  await expect(page.locator('#doc-hash')).toContainText('doc_hash');
+  await expect(page.getByText(/Over-broad/)).toBeVisible();
+  await page.getByRole('button', { name: /clear\(\)/ }).click();
+  await expect(page.getByText(/Tightly scoped/)).toBeVisible();
+  await page.getByRole('button', { name: /clear\(\)/ }).click(); // restore over-broad for the narrow step below
+  await expect(page.getByText(/Over-broad/)).toBeVisible();
+
   await page.locator('#narrow').click();
   await expect(page.getByText(/Verified narrowing/)).toBeVisible();
   await page.locator('#widen').click();

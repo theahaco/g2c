@@ -54,17 +54,42 @@ export const RULES: RuleView[] = [
   { name: 'treasury-cap', signers: ['treasury'], scope: 'XLM token', policy: 'spending-limit', reach: 'transfer() ≤ 100 XLM / day', status: 'sim' },
 ];
 
-/** The CI key's perch policy as a PolicyDoc (Act 5 describe/attenuate). */
-export function ciDoc(functions: string[]): PolicyDoc {
+/** Everything the Act-5 builder can vary about the CI key's single rule. */
+export interface BuildConfig {
+  /** Allowed functions. Empty ⇒ the rule OMITS `functions`, which means *any*
+   *  function — broader, not narrower (perch rejects an explicit empty list). */
+  functions: string[];
+  /** Attach `args[1] = self`, so the key can only post as the account itself. */
+  selfArg: boolean;
+  /** OZ `valid_until` expiry (perch `not-after-ledger`); null ⇒ never expires. */
+  notAfterLedger: number | null;
+}
+
+/** The status board's write functions the CI key can be granted. `clear` is the
+ *  dangerous one (wipes history) — the over-broad grant to narrow away. */
+export const BOARD_FUNCTIONS: { name: string; risky?: boolean }[] = [
+  { name: 'post' },
+  { name: 'clear', risky: true },
+];
+
+/** The tour opens over-broad (post + clear) so narrowing has something to do. */
+export const DEFAULT_BUILD: BuildConfig = { functions: ['post', 'clear'], selfArg: true, notAfterLedger: null };
+
+/** The CI key's perch policy as a PolicyDoc, assembled from a builder config. */
+export function buildDoc(cfg: BuildConfig): PolicyDoc {
   return {
     version: 1,
     network: TESTNET_PASSPHRASE,
     signers: [{ id: 'ci', verifier: CONTRACTS.verifier, key: POSTER_KEY_HEX }],
     rules: [
-      rule({ name: 'ci-can-publish', scope: contract(CONTRACTS.board), signedBy: ['ci'], functions, args: [{ index: 1, pred: isSelf() }] }),
+      rule({
+        name: 'ci-can-publish',
+        scope: contract(CONTRACTS.board),
+        signedBy: ['ci'],
+        functions: cfg.functions.length ? cfg.functions : undefined,
+        args: cfg.selfArg ? [{ index: 1, pred: isSelf() }] : undefined,
+        notAfterLedger: cfg.notAfterLedger ?? undefined,
+      }),
     ],
   };
 }
-
-export const OVERBROAD = ['post', 'clear'];
-export const SCOPED = ['post'];

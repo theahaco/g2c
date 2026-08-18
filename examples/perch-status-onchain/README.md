@@ -25,7 +25,10 @@ Styled in Nido's own "Warm Nest" design language.
    several rules where perch (the CI rule) **composes with OZ-native policies**
    (policy-free admin, an OZ spending-limit cap, a post-quantum co-signer). Then,
    on the CI rule:
-   - **describe** the policy as data → see its reachable calls + `doc_hash`;
+   - **build** the policy as data → a live **policy builder**: toggle the
+     functions the key may call, the `args[1] = self` author guard, and an
+     `not-after-ledger` expiry, and watch the wire `PolicyDoc`, its `doc_hash`,
+     the **reachable calls**, and a safety read all re-derive on every change;
    - **narrow** it safely → attenuation is a *machine-checked subset* (perch
      accepts a narrowing, refuses a widening);
    - **enforce** it on real testnet → the CI key `post`s (allowed) but cannot
@@ -41,9 +44,11 @@ npm install                 # from the repo root (workspaces)
 npm run dev -w perch-status-onchain
 ```
 
-Click through the acts. In Act 5, **Narrow → publish-only** (accepted), **Try to
-widen** (refused), then **Publish** (allowed on-chain) and **Wipe** (denied
-on-chain). Fees are paid by an ephemeral friendbot account funded on demand.
+Click through the acts. In Act 5, **build** the CI grant with the toggles (watch
+the `PolicyDoc`, `doc_hash`, and reachable calls update live), **Narrow →
+publish-only** (accepted), **Try to widen** (refused), then **Publish** (allowed
+on-chain) and **Wipe** (denied on-chain). Fees are paid by an ephemeral
+friendbot account funded on demand.
 
 ## Verify (browser snapshots)
 
