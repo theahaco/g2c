@@ -5,7 +5,8 @@
     "packages/*",
     "packages/contract-bindings/*",
     "examples/status-message-dapp",
-    "examples/status-message-dapp/packages/*"
+    "examples/status-message-dapp/packages/*",
+    "examples/perch-status-onchain"
   ],
   "scripts": {
     "build:packages": "npm run build -w @nidohq/smart-account -w @nidohq/multisig-policy -w @nidohq/spending-limit-policy -w @nidohq/webauthn-verifier -w @nidohq/factory -w @nidohq/status-message -w @nidohq/zk-recovery -w @nidohq/passkey-sdk -w @nidohq/stellar-wallets-kit-module",

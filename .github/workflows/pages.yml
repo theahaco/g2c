@@ -1,14 +1,21 @@
-name: Deploy Example to GitHub Pages
+name: Deploy examples to GitHub Pages
 
-# Deploys examples/status-message-dapp/ as a live testnet demo at the GitHub
-# Pages project URL for this repository. Independent of the Cloudflare deploy of
-# the main Nido frontend (see deploy.yml / preview.yml).
+# Deploys the repo's example dApps as a live testnet demo at the GitHub Pages
+# project URL. status-message-dapp is the home (project root); each additional
+# example is nested under its own subpath. To add an example: build it into a
+# subfolder of the uploaded site (see the "extra examples" step). Independent of
+# the Cloudflare deploy of the main Nido frontend (deploy.yml / preview.yml).
+#
+#   /<repo>/                      → status-message-dapp
+#   /<repo>/perch-status-onchain/ → perch guided tour (enforced on live testnet)
 
 on:
   push:
     branches: [main]
     paths:
       - "examples/status-message-dapp/**"
+      - "examples/perch-status-onchain/**"
+      - "packages/**"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -17,14 +24,11 @@ permissions:
   pages: write
   id-token: write
 
-# Allow one concurrent deployment; don't cancel an in-progress publish.
 concurrency:
   group: pages
   cancel-in-progress: false
 
-# Build-time config for the live demo. All public (no secrets). The committed
-# client is bound to the testnet contract id; these point the frontend at
-# testnet and at the production Nido passkey wallet.
+# Build-time config for the status-message live demo. All public (no secrets).
 env:
   PAGES_BASE_PATH: "/${{ github.event.repository.name }}/"
   PUBLIC_STELLAR_NETWORK: TESTNET
@@ -47,23 +51,35 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      # The example imports these workspace packages, which publish built dist/.
-      # The status_message client is committed as source and built here too.
+      # Workspace packages the examples import (each publishes a built dist/).
       - name: Build workspace dependencies
         run: |
           npm run build -w @nidohq/passkey-sdk
           npm run build -w @nidohq/stellar-wallets-kit-module
           npm run build -w status_message
+          npm run build -w @nidohq/testkit
 
-      - name: Build the example (GitHub Pages base)
+      # --- home: status-message-dapp at the project root ---
+      - name: Build status-message-dapp (GitHub Pages base)
         run: npm run build:pages
         working-directory: examples/status-message-dapp
 
-      # GitHub Pages serves 404.html for unmatched paths; making it the SPA
-      # shell lets client-side routes under the project path survive a direct reload.
+      # GitHub Pages serves 404.html for unmatched paths; making it the SPA shell
+      # lets status-message's client-side routes survive a direct reload.
       - name: SPA fallback
         run: cp dist/index.html dist/404.html
         working-directory: examples/status-message-dapp
+
+      # --- extra examples: each nested under its own subpath ---
+      # Relative base (--base=./) so the bundle loads correctly from the subpath.
+      - name: Build the perch tour (nested)
+        run: npm run build:preview
+        working-directory: examples/perch-status-onchain
+
+      - name: Nest the tour under the site
+        run: |
+          cp -r examples/perch-status-onchain/dist \
+            examples/status-message-dapp/dist/perch-status-onchain
 
       - uses: actions/configure-pages@v5
 

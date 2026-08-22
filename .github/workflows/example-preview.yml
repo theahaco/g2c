@@ -11,6 +11,7 @@ on:
     types: [opened, synchronize, reopened]
     paths:
       - "examples/status-message-dapp/**"
+      - "examples/perch-status-onchain/**"
       - ".github/workflows/example-preview.yml"
       # The example exercises the wallet's connect / delegation-handover /
       # session-signing flows, so a wallet or SDK PR needs the example preview
@@ -60,6 +61,7 @@ jobs:
           npm run build -w @nidohq/passkey-sdk
           npm run build -w @nidohq/stellar-wallets-kit-module
           npm run build -w status_message
+          npm run build -w @nidohq/testkit
 
       - name: Build the example (apex base)
         run: npx vite build
@@ -68,6 +70,16 @@ jobs:
       - name: SPA routing for Cloudflare
         run: echo "/* /index.html 200" > dist/_redirects
         working-directory: examples/status-message-dapp
+
+      # Extra examples nested under their own subpath in the same deploy.
+      # Relative base (--base=./) so each loads correctly from its subpath.
+      - name: Build the perch tour (nested)
+        run: npm run build:preview
+        working-directory: examples/perch-status-onchain
+
+      - name: Nest the tour under the deploy
+        run: |
+          cp -r examples/perch-status-onchain/dist examples/status-message-dapp/dist/perch-status-onchain
 
       # Deploy to a branch alias of the mysoroban project. The custom-domain
       # wildcard (*.mysoroban.xyz) only serves the project's PRODUCTION branch,
@@ -101,7 +113,11 @@ jobs:
             const previewUrl = process.env.PREVIEW_URL
               || `https://example-pr-${prNum}.mysoroban.pages.dev`;
             const liveUrl = `https://${context.repo.owner}.github.io/${context.repo.repo}/`;
-            const body = `**Example dApp preview deployed!**\n\n${previewUrl}\n\nThe \`status-message\` example (testnet), wallet = THIS PR's preview (https://${prNum}.nido.fyi). The live home is ${liveUrl} once merged.`;
+            const base = previewUrl.replace(/\/?$/, '/');
+            const body = `**Example dApp preview deployed!**\n\n`
+              + `- \`status-message\` — ${previewUrl}\n`
+              + `- \`perch-status-onchain\` (guided tour) — ${base}perch-status-onchain/\n\n`
+              + `status-message runs on testnet, wallet = THIS PR's preview (https://${prNum}.nido.fyi); the perch tour drives perch on real testnet. The live home is ${liveUrl} once merged.`;
 
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
