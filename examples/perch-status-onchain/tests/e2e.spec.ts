@@ -66,4 +66,24 @@ test('perch tour: five acts, attenuation, and live on-chain enforce', async ({ p
   await expect(page.locator('#res-clear .alert.danger')).toBeVisible({ timeout: 120_000 });
   await page.waitForTimeout(550); // let the act entrance animation settle
   await page.screenshot({ path: 'artifacts/07-clear-denied.png', fullPage: true });
+
+  // Act 6 — add signers, M-of-N. The policy panel gains a 2-of-3 quorum rule,
+  // and the threshold is PROVEN live: 2 co-signers pass, 1 alone is denied.
+  await page.getByRole('button', { name: /^Next/ }).click();
+  await expect(page.getByRole('heading', { name: /Require a quorum/i })).toBeVisible();
+  await expect(page.getByText('ops-quorum')).toBeVisible(); // the M-of-N rule in the policy panel
+  await expect(page.getByText(/OZ multisig · M-of-N/)).toBeVisible();
+  await page.waitForTimeout(550);
+  await page.screenshot({ path: 'artifacts/08-act6-quorum.png', fullPage: true });
+
+  await page.locator('#mofn-2').click(); // 2 of 3 → meets threshold
+  await expect(page.locator('#res-mofn-2 .alert.good')).toBeVisible({ timeout: 120_000 });
+  await expect(page.locator('#res-mofn-2 a')).toHaveAttribute('href', /stellar\.expert\/explorer\/testnet\/tx/);
+  await page.waitForTimeout(550);
+  await page.screenshot({ path: 'artifacts/09-mofn-2of3-allowed.png', fullPage: true });
+
+  await page.locator('#mofn-1').click(); // 1 of 3 → below threshold
+  await expect(page.locator('#res-mofn-1 .alert.danger')).toBeVisible({ timeout: 120_000 });
+  await page.waitForTimeout(550);
+  await page.screenshot({ path: 'artifacts/10-mofn-1of3-denied.png', fullPage: true });
 });

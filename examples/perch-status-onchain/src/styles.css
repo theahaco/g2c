@@ -175,3 +175,27 @@ footer .mono { color: var(--ink-soft); }
 @media (prefers-reduced-motion: reduce) { * { animation: none !important; transition: none !important; } }
 @media (prefers-reduced-motion: no-preference) { .act { animation: rise .4s cubic-bezier(.2,.8,.2,1) both; } }
 @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+/* ---- policy visualization: signer legend + rules matrix (Acts 5–6) ---- */
+.policy-signers { display: flex; flex-wrap: wrap; gap: .5rem; }
+.psig { display: inline-flex; align-items: center; gap: .5rem; padding: .4rem .7rem; background: var(--paper-3); border: 1px solid var(--line); border-radius: var(--r-pill); }
+.psig-id { font-weight: 700; font-size: 13px; }
+.psig.sim { opacity: .72; }
+.policy-matrix { display: grid; grid-template-columns: minmax(9rem,1.1fr) minmax(11rem,1.4fr) minmax(8rem,.9fr) minmax(10rem,1.5fr); border: 1px solid var(--line); border-radius: var(--r-md); overflow: hidden; background: var(--paper-2); }
+.pm-row { display: contents; }
+.pm-c { padding: .7rem .8rem; border-top: 1px solid var(--line-soft); display: flex; align-items: center; gap: .35rem; flex-wrap: wrap; min-width: 0; }
+.pm-head .pm-c { border-top: none; background: var(--paper-3); font-family: var(--mono); font-size: 11px; letter-spacing: .04em; text-transform: uppercase; color: var(--mut); font-weight: 700; }
+.pm-row.on .pm-c { background: color-mix(in srgb, var(--good-soft) 40%, transparent); }
+.pm-row.sim .pm-c { opacity: .72; }
+.pm-name b { font-weight: 800; }
+.pm-name .star { color: var(--acc); font-size: 13px; }
+.pm-reach { color: var(--ink-soft); font-size: 13.5px; }
+.pm-who .quorum { font-family: var(--mono); font-size: 12px; font-weight: 800; color: var(--acc-ink); }
+.on-mark { font-family: var(--mono); font-size: 10.5px; font-weight: 700; padding: 2px 7px; border-radius: var(--r-pill); background: var(--good-soft); color: var(--good-ink); }
+@media (max-width: 720px) {
+  .policy-matrix { grid-template-columns: 1fr 1fr; }
+  .pm-head { display: none; }
+  .pm-c { border-top: none; }
+  .pm-row { display: grid; grid-template-columns: 1fr 1fr; gap: 0; border-top: 1px solid var(--line-soft); }
+  .pm-row .pm-name, .pm-row .pm-reach { grid-column: 1 / -1; }
+}

@@ -21,8 +21,8 @@ import {
   xdr,
 } from '@stellar/stellar-sdk';
 import { buildSyntheticAssertion, computeAuthDigest, secp256r1Keypair } from '@nidohq/testkit';
-import { buildAuthHash, injectPasskeySignature } from '@nidohq/passkey-sdk';
-import { CONTRACTS, NETWORK, POSTER_SEED, RPC_URL, RULE_ID } from './config.js';
+import { buildAuthHash, injectPasskeySignature, injectSignedAuthPayload } from '@nidohq/passkey-sdk';
+import { CONTRACTS, NETWORK, POSTER_SEED, RPC_URL, RULE_ID, THRESHOLD } from './config.js';
 
 export type Fn = 'post' | 'clear';
 export interface InvokeOutcome {
@@ -140,6 +140,97 @@ export async function invokeBoardCall(
   const final = await poll(sent.hash);
   const ok = final.status === 'SUCCESS';
   return { fn, ok, denied: !ok && fn === 'clear', hash: sent.hash, reason: ok ? undefined : 'reverted in __check_auth (perch Denied)', sorobanData };
+}
+
+/** The three secp256r1 co-signers of the 2-of-3 account (deterministic seeds). */
+const thresholdKeys = THRESHOLD.signers.map((s) => secp256r1Keypair(s.seed));
+
+export interface ThresholdOutcome {
+  keyCount: number;
+  ok: boolean;
+  denied: boolean;
+  hash?: string;
+  reason?: string;
+  sorobanData?: xdr.SorobanTransactionData;
+}
+
+/**
+ * Drive the 2-of-3 account's Default rule live: `post` signed by `keyCount` of
+ * the three co-signers. `keyCount >= threshold` → the multisig policy passes;
+ * fewer → it denies. Same proven flow as `invokeBoardCall`, but M assertions
+ * over the one auth digest go into a single AuthPayload (`injectSignedAuthPayload`).
+ * `reuseSorobanData` lets the below-threshold case borrow the passing footprint
+ * so it still lands a real, cleanly-failed on-chain tx.
+ */
+export async function proveThreshold(
+  feeKp: Keypair,
+  keyCount: number,
+  reuseSorobanData?: xdr.SorobanTransactionData,
+  note: Progress = () => {},
+): Promise<ThresholdOutcome> {
+  const account = THRESHOLD.account;
+  const message =
+    keyCount >= THRESHOLD.threshold ? `${keyCount}-of-3 authorized this on-chain` : `${keyCount} signer is below the 2-of-3 threshold`;
+  const op = Operation.invokeContractFunction({
+    contract: CONTRACTS.board,
+    function: 'post',
+    args: [nativeToScVal(message, { type: 'string' }), Address.fromString(account).toScVal()],
+  });
+
+  note('Recording-simulating…');
+  const src = await server.getAccount(feeKp.publicKey());
+  const tx = new TransactionBuilder(src, { fee: (Number(BASE_FEE) * 100).toString(), networkPassphrase: NETWORK })
+    .addOperation(op)
+    .setTimeout(120)
+    .build();
+  const sim = await server.simulateTransaction(tx);
+  if (rpc.Api.isSimulationError(sim)) return { keyCount, ok: false, denied: false, reason: `simulation: ${sim.error}` };
+
+  const lastLedger = (await server.getLatestLedger()).sequence;
+  const assembled = rpc.assembleTransaction(tx, sim).build();
+
+  note(`Signing with ${keyCount} of 3 co-signers…`);
+  const entry = (assembled.operations[0] as Operation.InvokeHostFunction).auth![0]!;
+  const authDigest = computeAuthDigest(buildAuthHash(entry, NETWORK, lastLedger), [RULE_ID]);
+  const signed = thresholdKeys.slice(0, keyCount).map((kp) => {
+    const a = buildSyntheticAssertion(kp.secretKey, authDigest);
+    return {
+      kind: 'external' as const,
+      verifierAddress: CONTRACTS.verifier,
+      publicKey: kp.publicKey,
+      passkeySignature: { authenticatorData: a.authenticatorData, clientDataJson: a.clientDataJSON, signature: a.signature },
+    };
+  });
+  injectSignedAuthPayload(assembled, signed, lastLedger, undefined, [RULE_ID]);
+
+  note('Enforcing re-simulation (runs __check_auth: multisig threshold on-chain)…');
+  let sorobanData = reuseSorobanData;
+  const sim2 = await server.simulateTransaction(assembled);
+  if (rpc.Api.isSimulationError(sim2)) {
+    const reason = thresholdReason(sim2.error);
+    if (!reuseSorobanData) return { keyCount, ok: false, denied: true, reason };
+  } else {
+    sorobanData = sim2.transactionData.build();
+  }
+  const resourceFee = Number((sim2 as rpc.Api.SimulateTransactionSuccessResponse).minResourceFee ?? 0);
+
+  note('Submitting to testnet…');
+  const finalTx = TransactionBuilder.cloneFrom(assembled, { fee: (resourceFee + 2_000_000).toString() })
+    .setSorobanData(sorobanData!)
+    .build();
+  finalTx.sign(feeKp);
+  const sent = await server.sendTransaction(finalTx);
+  const belowThreshold = keyCount < THRESHOLD.threshold;
+  if (sent.status === 'ERROR') return { keyCount, ok: false, denied: belowThreshold, hash: sent.hash, reason: 'send error', sorobanData };
+  const final = await poll(sent.hash);
+  const ok = final.status === 'SUCCESS';
+  return { keyCount, ok, denied: !ok && belowThreshold, hash: sent.hash, reason: ok ? undefined : 'reverted in __check_auth (threshold not met)', sorobanData };
+}
+
+function thresholdReason(err: string): string {
+  if (/InvalidAction|Threshold|InsufficientSigners|Denied|Auth|#\d+/i.test(err))
+    return 'multisig enforce → threshold not met (need 2 of 3 signatures)';
+  return err.split('\n')[0] ?? err;
 }
 
 /** Map a raw enforcing-sim error to a human line — perch's Denied is contract error #1. */

@@ -3,7 +3,7 @@
 // policy as several rules — showing how perch composes with OZ-native policies.
 // The CI key's rule is the one actually enforced on-chain in Act 5.
 import { contract, isSelf, rule, secp256r1Keypair, mlDsa65Keypair, TESTNET_PASSPHRASE, type PolicyDoc } from '@nidohq/testkit';
-import { CONTRACTS } from './config.js';
+import { CONTRACTS, THRESHOLD } from './config.js';
 import { poster } from './perchOnchain.js';
 
 const hex = (b: Uint8Array) => Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('');
@@ -35,7 +35,7 @@ export const SIGNERS: SignerView[] = [
   { id: 'treasury', label: 'Treasury account', verifier: 'delegated', kind: 'Delegated', detail: `account ${short(TREASURY_G)}`, status: 'live', note: 'Delegated → another G-account authorizes on the account’s behalf' },
 ];
 
-export type PolicyKind = 'policy-free' | 'perch' | 'spending-limit';
+export type PolicyKind = 'policy-free' | 'perch' | 'spending-limit' | 'm-of-n';
 export interface RuleView {
   name: string;
   signers: string[];
@@ -74,6 +74,38 @@ export const BOARD_FUNCTIONS: { name: string; risky?: boolean }[] = [
 
 /** The tour opens over-broad (post + clear) so narrowing has something to do. */
 export const DEFAULT_BUILD: BuildConfig = { functions: ['post', 'clear'], selfArg: true, notAfterLedger: null };
+
+// --- Act 6: adding signers and an M-of-N quorum ------------------------------
+//
+// The 2-of-3 account (deployed by scripts/prove-threshold.ts) — three secp256r1
+// co-signers on the Default rule, gated by Nido's multisig policy at threshold 2.
+
+/** The three co-signers of the 2-of-3 account, derived from their seeds. */
+export const MOFN_SIGNERS: SignerView[] = THRESHOLD.signers.map((s, i) => {
+  const kp = secp256r1Keypair(s.seed);
+  const labels = ['Owner passkey', 'Backup key', 'Treasury key'];
+  const notes = ['the human owner', 'a recovery / co-sign device', 'a finance co-signer'];
+  return {
+    id: s.id,
+    label: labels[i] ?? s.id,
+    verifier: 'secp256r1',
+    kind: 'External',
+    detail: `key ${short(hex(kp.publicKey))}`,
+    status: 'live',
+    note: notes[i],
+  };
+});
+
+/** The quorum rule: any of the three may propose, but 2 signatures are required. */
+export const MOFN_RULE: RuleView = {
+  name: 'ops-quorum',
+  signers: MOFN_SIGNERS.map((s) => s.id),
+  scope: 'any call',
+  policy: 'm-of-n',
+  reach: `${THRESHOLD.threshold}-of-${THRESHOLD.signers.length} must sign · any account op`,
+  status: 'live',
+  onchain: true,
+};
 
 /** The CI key's perch policy as a PolicyDoc, assembled from a builder config. */
 export function buildDoc(cfg: BuildConfig): PolicyDoc {

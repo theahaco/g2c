@@ -8,10 +8,10 @@
 //   5 perch: describe · prove · enforce (the payoff — live on testnet)
 import { Keypair } from '@stellar/stellar-sdk';
 import { reachableCalls, isNarrowing, docHash, type PolicyDoc } from '@nidohq/testkit';
-import type { Fn, InvokeOutcome } from './perchOnchain.js';
-import { fundedFeeSource, invokeBoardCall } from './perchOnchain.js';
-import { buildDoc, DEFAULT_BUILD, BOARD_FUNCTIONS, SIGNERS, RULES, type SignerView, type RuleView, type PolicyKind, type BuildConfig } from './policyModel.js';
-import { CONTRACTS, explorerContract, explorerTx } from './config.js';
+import type { Fn, InvokeOutcome, ThresholdOutcome } from './perchOnchain.js';
+import { fundedFeeSource, invokeBoardCall, proveThreshold } from './perchOnchain.js';
+import { buildDoc, DEFAULT_BUILD, BOARD_FUNCTIONS, SIGNERS, RULES, MOFN_SIGNERS, MOFN_RULE, type SignerView, type RuleView, type PolicyKind, type BuildConfig } from './policyModel.js';
+import { CONTRACTS, THRESHOLD, explorerContract, explorerTx } from './config.js';
 import type { xdr } from '@stellar/stellar-sdk';
 
 // ---------- state ----------
@@ -21,7 +21,9 @@ const STEPS = [
   { n: 3, label: 'OZ model' },
   { n: 4, label: 'Nido' },
   { n: 5, label: 'perch' },
+  { n: 6, label: 'M-of-N' },
 ];
+const LAST_STEP = STEPS.length;
 const state = {
   step: 1,
   connected: false,
@@ -30,6 +32,7 @@ const state = {
   feeKp: null as Keypair | null,
   busy: false,
   lastAllowFootprint: undefined as xdr.SorobanTransactionData | undefined,
+  mofnFootprint: undefined as xdr.SorobanTransactionData | undefined,
 };
 
 const app = document.getElementById('app')!;
@@ -117,8 +120,8 @@ function nav(): HTMLElement {
   back.disabled = state.step === 1;
   back.addEventListener('click', () => go(Math.max(1, state.step - 1)));
   n.append(back);
-  const next = el('button', 'btn acc', state.step === 5 ? 'Start over ↺' : 'Next →'); next.type = 'button';
-  next.addEventListener('click', () => go(state.step === 5 ? 1 : state.step + 1));
+  const next = el('button', 'btn acc', state.step === LAST_STEP ? 'Start over ↺' : 'Next →'); next.type = 'button';
+  next.addEventListener('click', () => go(state.step === LAST_STEP ? 1 : state.step + 1));
   n.append(next);
   return n;
 }
@@ -276,25 +279,10 @@ function ptypeBadge(p: PolicyKind): HTMLElement {
     'policy-free': ['chip', 'policy-free'],
     'perch': ['chip acc', 'perch interpreter'],
     'spending-limit': ['chip warn', 'OZ spending-limit'],
+    'm-of-n': ['chip warn', 'OZ multisig · M-of-N'],
   };
   const [cls, txt] = map[p];
   return el('span', cls, txt);
-}
-function ruleCard(r: RuleView): HTMLElement {
-  const clsMap: Record<PolicyKind, string> = { 'policy-free': 'free', 'perch': 'perch', 'spending-limit': 'cap' };
-  const c = el('div', `rule ${clsMap[r.policy]}${r.status === 'sim' ? ' sim' : ''}`);
-  const head = el('div'); head.style.display = 'flex'; head.style.justifyContent = 'space-between'; head.style.alignItems = 'center'; head.style.gap = '.5rem';
-  head.append(el('span', 'rn', r.name));
-  if (r.onchain) head.append(el('span', 'on-mark', 'on-chain'));
-  else if (r.status === 'sim') head.append(el('span', 'chip', '· sim'));
-  c.append(head);
-  const row1 = el('div', 'rrow'); row1.append(el('span', 'rk', 'signers'));
-  for (const s of r.signers) row1.append(el('span', 'chip', s));
-  row1.append(el('span', 'chip acc', r.scope));
-  c.append(row1);
-  const row2 = el('div', 'rrow'); row2.append(el('span', 'rk', 'policy'), ptypeBadge(r.policy)); c.append(row2);
-  const reach = el('div', 'reach'); reach.innerHTML = `reaches <b>${r.reach}</b>`; c.append(reach);
-  return c;
 }
 // ---------- Act 5 · the policy builder ----------
 /** A toggle chip (checkbox affordance) that flips a boolean and re-renders. */
@@ -388,14 +376,14 @@ function act5(): HTMLElement {
   a.append(actHead('perch', '<i>Build</i> the policy. Prove it\'s safe. Watch it enforce.',
     'perch is a policy you write as <b>data</b>, compiled to one tiny interpreter that\'s audited once. No per-account Rust. And the same <span class="mono">doc_hash</span> you review is the program the chain runs.'));
 
-  // full policy view — perch composed with OZ-native policies
-  const pol = el('div', 'card stack');
-  pol.append(el('h3', undefined, 'The account\'s full policy'));
-  pol.append(el('p', 'sub', 'Several rules. perch handles function/arg scoping (the CI rule); it composes with OZ-native policies — a spend cap on the treasury, policy-free admin (INV-2), a post-quantum co-signer.'));
-  const rl = el('div', 'rulelist');
-  for (const r of RULES) rl.append(ruleCard(r));
-  pol.append(rl);
-  a.append(pol);
+  // full policy view — perch composed with OZ-native policies (the panel reused
+  // in Act 6, so the picture updates as a quorum rule is added there).
+  a.append(policyPanel(
+    'The account\'s full policy',
+    'Several rules. perch handles function/arg scoping (the CI rule); it composes with OZ-native policies — a spend cap on the treasury, policy-free admin (INV-2), a post-quantum co-signer.',
+    SIGNERS,
+    RULES,
+  ));
 
   // ① build it — the interactive policy builder (controls + live document)
   const build = el('div', 'grid2 stack');
@@ -453,6 +441,131 @@ function act5(): HTMLElement {
   return a;
 }
 
+// ---------- policy visualization (a signers × rules panel) ----------
+/** The account's current policy, rendered: signer legend + a rules matrix
+ *  (who authorizes each rule, via which policy, and what it reaches). Reused
+ *  across acts, so the picture updates as the tour adds rules. */
+function policyPanel(title: string, sub: string, signers: SignerView[], rules: RuleView[]): HTMLElement {
+  const c = el('div', 'card stack');
+  c.append(el('h3', undefined, title));
+  if (sub) c.append(el('p', 'sub', sub));
+
+  const leg = el('div', 'policy-signers');
+  for (const s of signers) {
+    const chip = el('span', `psig${s.status === 'sim' ? ' sim' : ''}`);
+    chip.append(el('span', 'psig-id', s.label));
+    chip.append(verifierBadge(s));
+    leg.append(chip);
+  }
+  c.append(leg);
+
+  const tbl = el('div', 'policy-matrix');
+  const head = el('div', 'pm-row pm-head');
+  head.append(el('span', 'pm-c', 'rule'), el('span', 'pm-c', 'who authorizes'), el('span', 'pm-c', 'via'), el('span', 'pm-c', 'reaches'));
+  tbl.append(head);
+  for (const r of rules) {
+    const row = el('div', `pm-row${r.onchain ? ' on' : ''}${r.status === 'sim' ? ' sim' : ''}`);
+    const name = el('span', 'pm-c pm-name');
+    name.append(el('b', undefined, r.name));
+    if (r.policy === 'perch') name.append(el('span', 'star', '★'));
+    if (r.onchain) name.append(el('span', 'on-mark', 'on-chain'));
+    else if (r.status === 'sim') name.append(el('span', 'chip', 'sim'));
+    row.append(name);
+    const who = el('span', 'pm-c pm-who');
+    if (r.policy === 'm-of-n') who.append(el('span', 'quorum', `${THRESHOLD.threshold} of ${r.signers.length} ·`));
+    for (const s of r.signers) who.append(el('span', 'chip', s));
+    row.append(who);
+    const via = el('span', 'pm-c'); via.append(ptypeBadge(r.policy)); row.append(via);
+    row.append(el('span', 'pm-c pm-reach', r.reach));
+    tbl.append(row);
+  }
+  c.append(tbl);
+  return c;
+}
+
+// ---------- Act 6 · adding signers, M-of-N ----------
+function thresholdCard(keyCount: number, title: string, desc: string, expect: 'allow' | 'deny'): HTMLElement {
+  const c = el('div', 'card');
+  c.append(el('h3', undefined, title));
+  c.append(el('p', 'sub', desc));
+  const b = el('button', `btn ${expect === 'allow' ? 'acc' : 'ghost'}`, expect === 'allow' ? `Sign with ${keyCount} → expect ALLOW` : `Sign with ${keyCount} → expect DENY`);
+  b.type = 'button'; b.id = `mofn-${keyCount}`; b.disabled = state.busy;
+  b.addEventListener('click', () => runThreshold(keyCount));
+  c.append(b);
+  c.append((() => { const s = el('div'); s.id = `res-mofn-${keyCount}`; s.style.marginTop = '.7rem'; return s; })());
+  return c;
+}
+
+function act6(): HTMLElement {
+  const a = el('div', 'act');
+  a.append(actHead('M-of-N', 'Add signers. Require a <i>quorum</i>.',
+    'A Nido account holds many signers — and a rule can require several of them to agree. Attach the <b>OZ multisig policy</b> to a rule and it becomes <b>M-of-N</b>: no single key is enough. perch scopes <i>what</i> a key may do; the threshold policy governs <i>how many</i> must sign — composed on one account.'));
+
+  a.append(policyPanel(
+    'The account, now with a quorum',
+    'Three secp256r1 co-signers on the Default rule, gated by Nido’s multisig policy at threshold 2 — a live 2-of-3 on testnet.',
+    MOFN_SIGNERS,
+    [MOFN_RULE],
+  ));
+
+  const acct = el('p', 'sub');
+  const link = el('a', 'mono'); (link as HTMLAnchorElement).href = explorerContract(THRESHOLD.account); (link as HTMLAnchorElement).target = '_blank';
+  link.textContent = short(THRESHOLD.account);
+  acct.append(document.createTextNode('Deployed 2-of-3 account: '), link, document.createTextNode(' · policy '));
+  const plink = el('a', 'mono'); (plink as HTMLAnchorElement).href = explorerContract(THRESHOLD.policy); (plink as HTMLAnchorElement).target = '_blank';
+  plink.textContent = 'nido multisig';
+  acct.append(plink);
+  a.append(acct);
+
+  const d = el('div', 'card stack');
+  d.append(el('h3', undefined, 'Prove the threshold — on real testnet'));
+  d.append(el('p', 'sub', 'Drive the account’s Default rule for real. Two of the three co-signers meet the quorum; one alone does not — the multisig policy’s <span class="mono">enforce</span> says so on-chain.'));
+  const row = el('div', 'grid2');
+  row.append(thresholdCard(2, 'Two signers agree', 'owner + backup co-sign one post — 2 of 3.', 'allow'));
+  row.append(thresholdCard(1, 'One signer alone', 'owner signs by themselves — below the threshold.', 'deny'));
+  d.append(row);
+  a.append(d);
+
+  const pay = el('div', 'bn stack');
+  const l = el('div', 'col');
+  l.innerHTML = '<div class="eyebrow">Adding signers</div><ul><li>Hold keys across verifiers — passkeys, post-quantum, delegated.</li><li>A rule with N signers is <b>N-of-N</b> by default (all must sign).</li><li>Attach the <b>multisig policy</b> to make it <b>M-of-N</b>.</li></ul>';
+  const r2 = el('div', 'col now');
+  r2.innerHTML = '<div class="eyebrow">Composed on one account</div><ul><li><b>perch</b> — <i>what</i> each key may do (function/arg scope), audited once.</li><li><b>multisig</b> — <i>how many</i> must sign (M-of-N quorum).</li><li>Both are just policies on ContextRules — <b>no bespoke account code</b>.</li><li>Every verdict is the chain’s, in <span class="mono">__check_auth</span>.</li></ul>';
+  pay.append(l, r2);
+  a.append(pay);
+  return a;
+}
+
+async function runThreshold(keyCount: number): Promise<void> {
+  if (state.busy) return;
+  state.busy = true;
+  const setBtns = (dis: boolean) => { for (const k of [1, 2]) { const b = document.getElementById(`mofn-${k}`) as HTMLButtonElement | null; if (b) b.disabled = dis; } };
+  setBtns(true);
+  setMofnResult(keyCount, 'info', ['Preparing…']);
+  try {
+    if (!state.feeKp) { setMofnResult(keyCount, 'info', ['Funding an ephemeral fee account (friendbot)…']); state.feeKp = await fundedFeeSource(); }
+    // The below-threshold case borrows the 2-of-3 footprint to land a real failed tx.
+    const reuse = keyCount < THRESHOLD.threshold ? state.mofnFootprint : undefined;
+    const out: ThresholdOutcome = await proveThreshold(state.feeKp, keyCount, reuse, (s) => setMofnResult(keyCount, 'info', [s]));
+    if (keyCount >= THRESHOLD.threshold && out.ok) state.mofnFootprint = out.sorobanData;
+    if (out.ok) setMofnResult(keyCount, 'good', [`✓ Quorum met — ${keyCount} of 3 authorized on-chain.`, txLink(out.hash)]);
+    else setMofnResult(keyCount, 'danger', [`✕ Denied on-chain — ${out.reason ?? 'threshold not met'}`, out.hash ? txLink(out.hash) : '(rejected at enforcing simulation — the multisig verdict)']);
+  } catch (e) {
+    setMofnResult(keyCount, 'danger', [`Error: ${(e as Error).message}`]);
+  } finally {
+    state.busy = false;
+    setBtns(false);
+  }
+}
+function setMofnResult(keyCount: number, kind: 'good' | 'danger' | 'info', lines: (string | HTMLElement)[]): void {
+  const slot = document.getElementById(`res-mofn-${keyCount}`); if (!slot) return;
+  const al = el('div', `alert ${kind}${kind === 'danger' ? ' shake' : ''}`);
+  const body = el('span');
+  lines.forEach((l, i) => { if (i) body.append(el('br')); body.append(typeof l === 'string' ? document.createTextNode(l) : l); });
+  al.append(el('span', 'ic', kind === 'good' ? '✓' : kind === 'danger' ? '✕' : '·'), body);
+  slot.replaceChildren(al);
+}
+
 function oncard(fn: Fn, title: string, desc: string, btnCls: string, btnLabel: string): HTMLElement {
   const c = el('div', 'card');
   c.append(el('h3', undefined, title));
@@ -503,7 +616,7 @@ function setOnResult(fn: Fn, kind: 'good' | 'danger' | 'info', lines: (string | 
 }
 
 // ---------- render ----------
-const ACTS: Record<number, () => HTMLElement> = { 1: act1, 2: act2, 3: act3, 4: act4, 5: act5 };
+const ACTS: Record<number, () => HTMLElement> = { 1: act1, 2: act2, 3: act3, 4: act4, 5: act5, 6: act6 };
 function render(): void {
   app.replaceChildren();
   const stage = el('div', 'stage');
