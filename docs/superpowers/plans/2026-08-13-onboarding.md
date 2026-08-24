@@ -521,15 +521,94 @@ sequenceDiagram
 
 questions:
 - is the relayer conceptually part of the backend service? if so, we should make sure to write it so that its easy to remove/section off later once CAP-72 is a think
+
+relayer piece is a standard oz package
+via api call sending to specific relayer - sign & submit
+
 - How is G neutralized? Is this via setOptions?
+set allowance first, so C acct can have full access
+then yes, setoptions to set key weight to 0
+
 - How can we get nido-funds used for fees back once CAP-72 is in place, and G is no longer ephemeral? Can we bake this into a policy?
+
+while we're stuck with relayer, we'll need to account for the fees
+
+could fordefi handle these fees 
+use fordefi to hold our relayer keys & perhaps could they handle the accounting
+
+every c account has its own muxed g account in fordefi
+
+after CAP-72, if it happens, it isnt really necessary 
+
+
+
+
 - how is the c address known before deployment? also, why does this matter?
+
+because when you create G, you need to call set allowance for that C acct
+
+random salt generated, and put in meta data on passkey, then also use that random salt to generate the C
+have to generate the passkey on the C account
+
+so we need to know the C before the passkey is created, so we can make it specifically for the C domain
+
+
 - how do we handle the the risk of our server failing in the middle of the setup phase? we'll lose G's secret? will we even need to handle this? maybe just error handle/retry scenario. could require a cleanup 
-- what happens if the user sends fund to a G that has been merged with R, they lose the funds? Or a G for which we've already called transfer_from? i.e. can we call transfer_from multiple times?
+
+tx1: sponsor acct, create account, preauth the set allowance, set options, 
+preauth the relayer to account merge  - all one tx
+
+tx2: invocation to set allowance - anyone can call this 
+
+tx3: install transfer from policy onto C
+
+2 and 3 can be retried anytime by anyone, the relayer
+
+- what happens if the user sends fund to a G that has been merged with R, will they lose the funds?
+
+check with coinbase - does it check that an account exists on chain before it does the transfer
+
+if it doesn't check - the transfer would fail
+
+if they recreate the account, who would have the key? itd probably be lost
+
+with CAP-72 this is not a concern
+
+- Or a G for which we've already called transfer_from? i.e. can we call transfer_from multiple times?
+yes, but if G has already been merged, we run into the previous question
+
+there are a couple ways to do the sweep & tear down 
+
+
+
 - could the watcher be part of backend, and not a goldsky piece? could we know all nido addresses?
     - query for C policies for G addresses 
+
+event for preauth for set allowance - keeps track of the this G -> this C
+
+all transfers from G
+
+all Cs are creating with nido factory
+
+
+- what if you want to onboard with something other than XLM? 
+
+first onboard with XLM, then later USDC another ephemeral G, all the stuff above + trustline
+
+how would you handle fees here? 
+
 - why is R able to request merging with G? because its a sponsored account?
-- is the watcher required? or can the relayer do this itself?>
+additional preauth & set the ledger
+preauth - has to include ledger minimum
+
+set allowance - temporary entry in storage, expire in 6 most
+
+
+- is the watcher required? or can the relayer do this itself?
+yes, but then we're implementing anothe rindexer, so why would we?
+
+
+
 
 old questions:
 - How is the allowance granted over G? - the `approve` function. How is the amount determined if we don't know how much the user is going to want to send from the exchange? It's just the MAX that i128 can be, so just setting it really high 
@@ -550,3 +629,126 @@ something similar to registry - goldsky pipeline dynamic table
     - the client builds the tx contract call payload and signs it and passes it to the relayer
     - but then the relayer is what sends & pays for the tx - this is kind of the whole point, c can't do this on it's own
     - the passkey signs the tx to install the policy, but not to call the sweep itself
+
+
+
+New Milestones before Meridian
+
+    - How to prevent draining R?
+
+        - C could do a bunch of txns - before meridian, even if it is just rate limiting
+    and
+        - lots of onboarding - this is something before general public release
+
+        prove that you're not a bot - captcha on signup page to prevent people from draining 
+
+    kind of hard to run bot-drain attack for a C because you have to run it on a specific URL
+
+    but with
+    recovery zkproof, or g acct you can add something that can swap out the passkey for a key that isnt associated with the web wallet
+
+    but you could do this via cli, and then be able to drain
+
+    can these txns still go through the relayer? would just be free relayer faciliator transactions
+
+
+    ahead of meridian - rate limiting
+
+    more than 100 txns wihtin 24hrs from the saem account - they have to wait
+
+
+   how do we make sure that onboarding happens from the website? this would hopefully would solve the bot-ability of DOSing the onboarding flow
+
+   right now we're storying on chain the publickey
+
+tiny proof of work contract - during setup phrase
+
+proof of work in the browser
+
+replacement for captcha that is doing proof of work
+
+other onboarding flow - prefund someone else's acct
+you are their sponsor - so you are trusted of the gate, still have the captcha though
+
+
+do this for us, for now. and later
+
+the only way you get a nido account - you get something from the printer - for Merdian
+
+creating the account in real time
+- can the qr code give you the secret key?
+
+the qr code be a recovery, do a swap as part of their onboarding
+
+recovering into the nido
+
+
+
+---
+how does allowance work?
+
+
+fee metering - how can we do this?
+
+i send an allowance for 10, and send and allowance for 100
+
+does this mean my balance can't go below 110?
+
+we transfer 10 xlm first to relayer, and then transfer whatever is left to C
+
+anyone can call transfer from - so we need to make sure we do it first
+
+
+OR, do a relayer allowance on C - so this wouldnt matter, but they could also transfer it somewhere quicker frist
+
+metering - if every rquest of r, the tx fee comes from the c account balance/allowance
+
+escrow as well? instand of directly from G -> C, it goes from G to and escrow, we control the escrow
+
+when transfering from escrow to C - we keep some
+
+let's wait on the escrow
+
+but when we do tx fee metering, maybe with escrow
+
+as part of sweep - 
+now we have anyone can make the call, but we can change this to whenever the sweep includes the 
+
+balance of XLM - 10, unless that 10 has already been transfered to R
+
+
+don't do mainnet rollout premetering, we;ll be ok
+---
+
+C is bricked until it sends a transfer of x XLM to R, and that transaction removes the brick
+
+right now the C has full control of the policies - but this is why we have an escrow
+
+
+this allows us to have specific policies without messing with tht eC acct
+
+
+--
+
+even post CAP-72, the C account is only able to interact with soroban not classic
+
+--
+
+valid until on the allowance, and the policy expiry match
+
+-- 
+
+if using freighter - sitll would be easier to do the allowance piece so then you can just use the c passkeys 
+similar to cap 72 in this case 
+
+there is not watcher at this point - you set the allowance 
+
+we don't worry about the watcher
+
+don't add the policy
+
+one time 
+
+--- 
+
+in post-cap72 you don't need a g->c transfer
