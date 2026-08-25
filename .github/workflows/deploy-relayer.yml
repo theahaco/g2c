@@ -18,12 +18,12 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6.1.0
 
-      - uses: superfly/flyctl-actions/setup-flyctl@v1
+      - uses: superfly/flyctl-actions/setup-flyctl@ed8efb33836e8b2096c7fd3ba1c8afe303ebbff1 # v1 tag, 2026-08-17
 
       - name: Load Fly token from 1Password
-        uses: 1password/load-secrets-action@v4
+        uses: 1password/load-secrets-action@4a8d23b8021e62998e4c050a53028a03d1284b26 # v4 tag, 2026-08-17
         with:
           export-env: true
         env:
