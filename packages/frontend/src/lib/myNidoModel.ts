@@ -2,7 +2,7 @@ export type MyNidoRow = {
   contractId: string;
   name: string | null;
   status: "active" | "pending";
-  /** present only for pending rows → resume at /new-account/?salt=<resumeKey> */
+  /** present only for pending rows → resume at /new-account/#salt=<resumeKey> */
   resumeKey?: string;
 };
 

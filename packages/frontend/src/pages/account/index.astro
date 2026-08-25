@@ -490,9 +490,15 @@ import MyNidoMenu from "../../components/MyNidoMenu.astro";
     if (choice.contractId === null) {
       // No account yet → start a fresh new-account reservation, carrying the claim
       // intent so we return here to claim the name once it's deployed.
-      const setupUrl = createNido(window.location.host); // //<setupHost>/new-account/?salt=<hex>&setup=1
-      const sep = setupUrl.includes("?") ? "&" : "?";
-      window.location.href = `${window.location.protocol}${setupUrl}${sep}then=claim:${encodeURIComponent(name)}`;
+      const setupUrl = createNido(window.location.host); // //<setupHost>/new-account/?setup=1#salt=<hex>
+      // Insert `then=claim:<name>` into the QUERY (read from location.search),
+      // BEFORE the `#salt=` fragment — appending at the end would bury it inside
+      // the hash. Split on `#` so the salt secret stays the last, hash-only part.
+      const hashIdx = setupUrl.indexOf("#");
+      const base = hashIdx >= 0 ? setupUrl.slice(0, hashIdx) : setupUrl;
+      const frag = hashIdx >= 0 ? setupUrl.slice(hashIdx) : "";
+      const sep = base.includes("?") ? "&" : "?";
+      window.location.href = `${window.location.protocol}${base}${sep}then=claim:${encodeURIComponent(name)}${frag}`;
       return;
     }
 

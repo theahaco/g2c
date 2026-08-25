@@ -20,13 +20,24 @@ license = "MIT"
 
 [workspace.dependencies]
 base64 = "0.22"
-soroban-sdk = "26.0.1"
-# OZ stellar-contracts main @ 637c53a — tagged release v0.7.1 is still on
-# soroban-sdk 25; the 26 bump landed on main after the tag.
-stellar-accounts = { git = "https://github.com/OpenZeppelin/stellar-contracts.git", rev = "637c53a8c4928fd0c71d330bd866f482c3454578", package = "stellar-accounts" }
-stellar-registry = "0.0.10"
-# soroban-sdk-tools: rev cbafae3 is the soroban-sdk 26 update.
-soroban-sdk-tools = { git = "https://github.com/BlaineHeffron/soroban-sdk-tools", rev = "cbafae3439f01a4add2411c6162885edb30e7389" }
+soroban-sdk = "27.0.2"
+# admin-sep: SEP admin/upgrade contract traits (`Administratable` + `Upgradable`,
+# soroban-sdk-27 `#[contracttrait]` default methods). Replaces the hand-inlined
+# admin/set_admin/upgrade boilerplate that was duplicated across the policy,
+# verifier, name-registry, zk-recovery-pool and factory contracts. Published by
+# theahaco (https://github.com/theahaco/admin-sep); Apache-2.0.
+admin-sep = "0.27.0"
+# OZ stellar-contracts pinned to ec749c3b — the merge of PR #816
+# ("chore: bump soroban-sdk to 27.0.2", merged 2026-07-27), i.e. the first main
+# commit on soroban-sdk 27. The `stellar-accounts` package is unchanged from our
+# prior 26 pin apart from the sdk-27 adaptation (spending-limit + storage). Move
+# to a tagged release once one lands on soroban-sdk 27 (latest tag v0.7.2 is 26.1).
+stellar-accounts = { git = "https://github.com/OpenZeppelin/stellar-contracts.git", rev = "ec749c3b75971f2c35ced1bea3e2a7e536e91cda", package = "stellar-accounts" }
+stellar-registry = "0.1.0"
+# soroban-sdk-tools 0.1.3 (crates.io) targets soroban-sdk 27, replacing the prior
+# BlaineHeffron git fork rev (which existed only to get a soroban-sdk 26 build). We
+# now depend on a published, versioned, immutable release rather than an untagged fork.
+soroban-sdk-tools = "0.1.3"
 
 [profile.contract]
 overflow-checks = true

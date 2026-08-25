@@ -181,11 +181,14 @@ fn constructor_installed_rule_drives_real_proof_completion_and_guard() {
     // --- The M0 zk-verifier + the real ZkRecovery controller, pinned at
     // CONTROLLER. ---
     let vk_bytes = Bytes::from_slice(&env, include_bytes!("../../fixtures/zk/vk"));
-    let verifier_id = env.register(zk_verifier_contract::WASM, (vk_bytes,));
+    let verifier_id = env.register(
+        zk_verifier_contract::WASM,
+        (Address::generate(&env), vk_bytes),
+    );
     let controller_addr = addr_from(&env, &fixture.controller);
     let factory = Address::generate(&env);
     let network_passphrase = Bytes::from_slice(&env, fixture.network_passphrase.as_bytes());
-    let webauthn_verifier = env.register(WEBAUTHN_VERIFIER_WASM, ());
+    let webauthn_verifier = env.register(WEBAUTHN_VERIFIER_WASM, (Address::generate(&env),));
 
     // `mock_all_auths` covers the setup calls below that are NOT
     // self-invoking (the account's own constructor cross-calling
@@ -207,6 +210,7 @@ fn constructor_installed_rule_drives_real_proof_completion_and_guard() {
             TIMELOCK_FLOOR_SECS,
             network_passphrase,
             webauthn_verifier.clone(),
+            Address::generate(&env), // upgrade admin (unused by this file's coverage)
         ),
     );
     let zk = ZkRecoveryClient::new(&env, &controller_addr);
@@ -471,7 +475,7 @@ fn setup_factory_and_pool(env: &Env) -> (Address, Address) {
     let admin = Address::generate(env);
     let factory_addr = env.register(FACTORY_WASM, (admin,));
 
-    let webauthn_verifier = env.register(WEBAUTHN_VERIFIER_WASM, ());
+    let webauthn_verifier = env.register(WEBAUTHN_VERIFIER_WASM, (Address::generate(env),));
     let pool_proof_verifier = Address::generate(env);
     let network_passphrase = Bytes::from_slice(env, b"Test SDF Network ; September 2015");
     let pool_addr = env.register(
@@ -485,6 +489,7 @@ fn setup_factory_and_pool(env: &Env) -> (Address, Address) {
             TIMELOCK_FLOOR_SECS,
             network_passphrase,
             webauthn_verifier.clone(),
+            Address::generate(env), // pool upgrade admin (unused by this file's coverage)
         ),
     );
 

@@ -84,10 +84,12 @@ export function mountDelegationForm(container: HTMLElement, account: string): vo
       // every dApp is on the new flow this form (and the synthetic key)
       // can be removed.
       const k = await generateSessionKey();
+      // The synthetic privateKey is intentionally NOT persisted — nothing signs
+      // with a stored session key any more (passkey-backed handover superseded
+      // this legacy in-wallet flow), so it must not touch disk.
       saveSessionKeyMaterial(account, target, {
         credentialId: k.credentialId,
         publicKey: buf2hex(k.publicKey),
-        privateKey: k.privateKey,
         label,
       });
 

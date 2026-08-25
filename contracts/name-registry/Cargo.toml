@@ -11,6 +11,7 @@ doctest = false
 
 [dependencies]
 soroban-sdk = { workspace = true }
+admin-sep = { workspace = true }
 soroban-sdk-tools = { workspace = true }
 
 [dev-dependencies]

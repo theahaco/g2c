@@ -67,9 +67,9 @@ import {
 import { sha256 } from '@noble/hashes/sha2.js';
 import { fetchRegistryAddress, simulateView } from './policyChainFetch.js';
 import { signAndSubmit, getSubmitter } from './primaryPasskeySigner.js';
-import { relayerEnabled } from './relayerClient.js';
+import { relayerEnabled, signatureExpirationOffset } from './relayerClient.js';
 import { relayerSubmitAndConfirm, classicSubmitAndPoll } from './signing/submit.js';
-import { RPC_URL, NETWORK_PASSPHRASE, RELAYER_SIM_SOURCE, RELAYER_EXPIRATION_OFFSET } from './network.js';
+import { RPC_URL, NETWORK_PASSPHRASE, RELAYER_SIM_SOURCE } from './network.js';
 import { prove } from './zk/prover.js';
 import type { NoirInputMap } from './zk/prover.worker.js';
 
@@ -124,10 +124,6 @@ function rawProofFromBlob(blob: Uint8Array): Uint8Array {
  * `#[contractevent(topics = ["leaf_inserted"], data_format = "map")]`).
  */
 const LEAF_INSERTED_EVENT_NAME = 'leaf_inserted';
-
-/** Ledger-count validity window for the zero-signer completion auth entry
- *  (classic/self-submit path) — mirrors `auth.ts`'s `DEFAULT_EXPIRATION_OFFSET`. */
-const CLASSIC_EXPIRATION_LEDGER_OFFSET = 10000;
 
 const encoder = new TextEncoder();
 
@@ -768,7 +764,7 @@ async function submitZeroSignerCompletion(
   }
   const signedEntry = xdr.SorobanAuthorizationEntry.fromXDR(op.auth[0].toXDR());
   const creds = signedEntry.credentials().address();
-  const expirationOffset = useRelayer ? RELAYER_EXPIRATION_OFFSET : CLASSIC_EXPIRATION_LEDGER_OFFSET;
+  const expirationOffset = signatureExpirationOffset(useRelayer);
   creds.signatureExpirationLedger(lastLedger + expirationOffset);
   creds.signature(zeroSignerAuthPayloadScVal(contextRuleIds));
   (op.auth as xdr.SorobanAuthorizationEntry[])[0] = signedEntry;

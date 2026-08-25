@@ -4,8 +4,12 @@ import { buildAuthPayloadScVal } from "./multiSigner.js";
 import type { SignerSignature } from "./multiSigner.js";
 import type { PasskeySignature } from "./types.js";
 
-/** Default ledger offset for signature expiration. */
-const DEFAULT_EXPIRATION_OFFSET = 10000;
+/** Default ledger offset for signature expiration (~14h). This is the single
+ *  source of truth: `buildAuthHash` and BOTH injectors below default to it, and
+ *  it is exported so callers (e.g. the frontend's `signatureExpirationOffset`)
+ *  pass the SAME value to the hash builder and the injector — a mismatch makes
+ *  `__check_auth` recompute a different digest and reject the signature. */
+export const DEFAULT_EXPIRATION_OFFSET = 10000;
 
 /**
  * Compute the Soroban signature_payload — sha256 of the HashIdPreimage that

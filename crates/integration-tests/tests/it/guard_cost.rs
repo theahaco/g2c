@@ -130,7 +130,10 @@ fn guard_fires_cost_with_real_pending() {
     // cross-call runs through the metered Wasm VM on BOTH sides, matching
     // `initiate_cost.rs`'s honesty bar. ---
     let vk_bytes = Bytes::from_slice(&env, include_bytes!("../../fixtures/zk/vk"));
-    let verifier_id = env.register(zk_verifier_contract::WASM, (vk_bytes,));
+    let verifier_id = env.register(
+        zk_verifier_contract::WASM,
+        (Address::generate(&env), vk_bytes),
+    );
     let controller_addr = addr_from(&env, &fixture.controller);
     let factory = Address::generate(&env);
     let network_passphrase = Bytes::from_slice(&env, fixture.network_passphrase.as_bytes());
@@ -147,6 +150,7 @@ fn guard_fires_cost_with_real_pending() {
             TIMELOCK_FLOOR_SECS,
             network_passphrase,
             webauthn_verifier,
+            Address::generate(&env), // upgrade admin (unused by this file's coverage)
         ),
     );
     let zk = ZkRecoveryClient::new(&env, &controller_addr);

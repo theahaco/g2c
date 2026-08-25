@@ -23,6 +23,7 @@
 use crate::hash::wrap_leaf;
 use crate::merkle;
 use crate::types::{LeafInserted, RecoveryConfig, RecoveryError, RecoveryKey};
+use admin_sep::{Administratable, Upgradable};
 use soroban_sdk::{contract, contractimpl, panic_with_error, Address, Bytes, BytesN, Env, U256};
 
 // `controller.rs` (M1 Task 5) is declared as a *submodule of `pool`* (not a
@@ -100,10 +101,41 @@ fn insert_bound(env: &Env, account: &Address, commitment: &BytesN<32>) -> u32 {
 #[contract]
 pub struct ZkRecovery;
 
+// Governance (issue #26): admin/set_admin/upgrade come from the shared
+// `admin-sep` crate (`Administratable` + `Upgradable`), replacing the inlined
+// boilerplate.
+//
+// Unlike the per-account `smart-account::upgrade` -- which is blocked while
+// that account's own recovery is pending, because the account is its own admin
+// and a stolen passkey could otherwise upgrade-to-neuter its in-flight recovery
+// -- this pool has a SEPARATE governance admin (the multisig), distinct from
+// any recovering account's authority. A per-account "pending" guard is
+// therefore neither meaningful nor sufficient here (the pool holds many
+// accounts' pending records at once); the trust boundary is the admin multisig
+// + upgrade timelock (plan B1), reviewed as such by the auditor. The immutable
+// `RecoveryConfig` and all Merkle/nullifier/pending state survive the upgrade
+// untouched -- only the code is replaced.
+#[contractimpl(contracttrait)]
+impl Administratable for ZkRecovery {}
+
+#[contractimpl(contracttrait)]
+impl Upgradable for ZkRecovery {}
+
 #[contractimpl]
 impl ZkRecovery {
-    /// Stores the immutable `RecoveryConfig` (spec §3.3 "Defaults"). Must
-    /// run once, at deploy time, before any other entry point.
+    /// Stores the immutable `RecoveryConfig` (spec §3.3 "Defaults") and the
+    /// `admin` authorized to upgrade this shared pool's wasm (issue #26).
+    /// Must run once, at deploy time, before any other entry point.
+    ///
+    /// `admin` is appended after the spec config args so existing positional
+    /// callers/deploy tooling keep their argument ordinals. It is stored via
+    /// `admin-sep` (a governance key) rather than inside `RecoveryConfig`: the
+    /// config is the immutable recovery *policy* (timelock, rate limit,
+    /// verifier addresses -- none of it ever changes), whereas `admin` is a
+    /// rotatable governance key (`set_admin`). `set_admin` on first call (no
+    /// admin yet) skips the auth check. Mainnet intent (plan B1): `admin` is a
+    /// multisig, ideally behind an upgrade timelock, so no single stolen key
+    /// can silently repoint the pool.
     #[allow(clippy::too_many_arguments)]
     // `env` is conventionally by-value for `#[contractimpl]` entry points.
     #[allow(clippy::needless_pass_by_value)]
@@ -117,6 +149,7 @@ impl ZkRecovery {
         timelock_floor_secs: u64,
         network_passphrase: Bytes,
         webauthn_verifier: Address,
+        admin: Address,
     ) {
         let cfg = RecoveryConfig {
             factory,
@@ -129,6 +162,7 @@ impl ZkRecovery {
             webauthn_verifier,
         };
         env.storage().instance().set(&RecoveryKey::Config, &cfg);
+        Self::set_admin(&env, admin);
     }
 
     /// GENESIS insert: the factory creates `account` and, in the same
@@ -185,6 +219,25 @@ impl ZkRecovery {
     pub fn next_index(env: Env) -> u32 {
         merkle::next_index(&env)
     }
+
+    /// Read-only view of this pool's immutable `RecoveryConfig` (spec §3.3).
+    /// Exposed as a contract entry point so the mainnet preflight gate
+    /// (`scripts/preflight-recovery-config.mjs`) and off-chain monitoring can
+    /// simulate-read the live `delay_secs`/`completion_window_secs`/
+    /// `timelock_floor_secs` (and the bound `factory`/`verifier`/
+    /// `webauthn_verifier`/`network_passphrase`) and assert they match the
+    /// production spec BEFORE any account is created against this pool -- the
+    /// go/no-go check for blocker A1 (testnet pools were built with a 60s
+    /// delay / 0s floor / 7d window, all wrong for mainnet, and the config is
+    /// immutable so a wrong pool must be caught pre-launch, not fixed later).
+    /// Pure getter; changes no state.
+    #[must_use]
+    // `env` is conventionally by-value for `#[contractimpl]` entry points; the
+    // module-level `config` free function (not this method) does the read.
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn config(env: Env) -> RecoveryConfig {
+        config(&env)
+    }
 }
 
 #[cfg(test)]
@@ -204,9 +257,15 @@ mod tests {
     impl RefContract {}
 
     fn setup(env: &Env) -> (Address, RecoveryConfig) {
+        let (id, cfg, _admin) = setup_with_admin(env);
+        (id, cfg)
+    }
+
+    fn setup_with_admin(env: &Env) -> (Address, RecoveryConfig, Address) {
         let factory = Address::generate(env);
         let verifier = Address::generate(env);
         let webauthn_verifier = Address::generate(env);
+        let admin = Address::generate(env);
         let cfg = RecoveryConfig {
             factory: factory.clone(),
             verifier,
@@ -228,9 +287,10 @@ mod tests {
                 cfg.timelock_floor_secs,
                 cfg.network_passphrase.clone(),
                 cfg.webauthn_verifier.clone(),
+                admin.clone(),
             ),
         );
-        (id, cfg)
+        (id, cfg, admin)
     }
 
     fn commitment_from_u64(env: &Env, x: u64) -> BytesN<32> {
@@ -291,6 +351,22 @@ mod tests {
             root, ref_root,
             "insert_for's resulting root must match independently inserting \
              wrap_leaf(account, commitment) via merkle::insert_leaf"
+        );
+    }
+
+    /// The `config()` view returns exactly the `RecoveryConfig` stored at
+    /// construction -- the read the mainnet preflight gate
+    /// (`scripts/preflight-recovery-config.mjs`) relies on to assert a live
+    /// pool's delay/window/floor match the production spec (blocker A1).
+    #[test]
+    fn config_view_returns_stored_config() {
+        let env = Env::default();
+        let (id, cfg) = setup(&env);
+        let client = ZkRecoveryClient::new(&env, &id);
+        assert_eq!(
+            client.config(),
+            cfg,
+            "config() must return the RecoveryConfig set at construction"
         );
     }
 
@@ -430,6 +506,24 @@ mod tests {
             res.is_ok(),
             "insert_for authorized by the account must succeed"
         );
+    }
+
+    /// Upgradability (issue #26): the constructor stores the `admin`, and
+    /// `set_admin` rotates it under the current admin's auth. The wasm-swap
+    /// path (`upgrade`) needs a second installed module, so it is exercised
+    /// at the integration level, not here.
+    #[test]
+    fn admin_is_stored_and_rotatable() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let (id, _cfg, admin) = setup_with_admin(&env);
+        let client = ZkRecoveryClient::new(&env, &id);
+
+        assert_eq!(client.admin(), admin);
+
+        let new_admin = Address::generate(&env);
+        client.set_admin(&new_admin);
+        assert_eq!(client.admin(), new_admin);
     }
 
     /// Task 11 (M2 residual): cross-crate constant drift guard, the half of

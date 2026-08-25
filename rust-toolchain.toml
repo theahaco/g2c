@@ -1,0 +1,11 @@
+# Pin the workspace Rust toolchain so contract wasm bytecode is reproducible:
+# `stable` drifts across releases and can change optimizer/codegen output for
+# byte-identical source. Bump this deliberately (and re-record deployed wasm
+# hashes in DEPLOYED.md) rather than letting it float. CI pins the same version
+# in .github/workflows/test.yml -- keep the two in lockstep.
+#
+# NOTE: confirm this matches the toolchain that built the currently-deployed
+# contracts before treating any rebuild as byte-for-byte reproducible.
+[toolchain]
+channel = "1.96.0"
+targets = ["wasm32v1-none"]

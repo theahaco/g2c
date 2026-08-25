@@ -79,8 +79,8 @@ export function loadAccountName(contractId: string): string | null {
 // --- Policy storage (Tier C/D from the spec) -------------------------------
 //
 // Friend nicknames and block labels are pure display overlay; session-key
-// material includes the private key (Tier D) and must never leave this
-// origin. Keys are namespaced by smart-account address.
+// material is passkey-backed (credentialId + public key only — no private key
+// on disk; see SessionKeyMaterial). Keys are namespaced by smart-account address.
 
 const friendsKey = (account: string) => `nido.${account}.friends`;
 const sessionKey = (account: string, target: string) =>
@@ -112,16 +112,15 @@ export function loadFriendNicknames(account: string): Record<string, string> {
  *    sign to construct the `External(verifier, pubkey)` signer; the
  *    credential id alone can't yield the pubkey.
  *
- * Older session-key entries created before the passkey-backed flow may
- * still have a `privateKey` field — accepted on load for forward compat
- * but never written by current code.
+ * No private key is stored: sessions are passkey-backed (the private key stays
+ * in the authenticator). Old synthetic-flow entries may still carry a plaintext
+ * `privateKey` — nothing signs with it any more, so `loadSessionKeyMaterial`
+ * PURGES it from storage on load rather than returning it.
  */
 export interface SessionKeyMaterial {
   credentialId: string;
   publicKey: string;        // hex, 65 bytes
   label?: string;
-  /** @deprecated synthetic-key flow only; absent for passkey-backed sessions. */
-  privateKey?: Uint8Array;
 }
 
 export function saveSessionKeyMaterial(
@@ -134,9 +133,7 @@ export function saveSessionKeyMaterial(
     publicKey: material.publicKey,
     label: material.label,
   };
-  if (material.privateKey) {
-    serialized.privateKey = Array.from(material.privateKey);
-  }
+  // Deliberately NO privateKey: a session private key must never touch disk.
   localStorage.setItem(sessionKey(account, target), JSON.stringify(serialized));
 }
 
@@ -144,14 +141,21 @@ export function loadSessionKeyMaterial(
   account: string,
   target: string,
 ): SessionKeyMaterial | null {
-  const raw = localStorage.getItem(sessionKey(account, target));
+  const key = sessionKey(account, target);
+  const raw = localStorage.getItem(key);
   if (!raw) return null;
   const o = JSON.parse(raw);
+  // Purge a deprecated synthetic-flow privateKey: nothing signs with a stored
+  // session key any more, so persisted private bytes are dead + sensitive —
+  // drop them from storage on first load and never hand them back.
+  if (o.privateKey !== undefined) {
+    delete o.privateKey;
+    localStorage.setItem(key, JSON.stringify(o));
+  }
   return {
     credentialId: o.credentialId,
     publicKey: o.publicKey,
     label: o.label,
-    ...(o.privateKey ? { privateKey: new Uint8Array(o.privateKey) } : {}),
   };
 }
 

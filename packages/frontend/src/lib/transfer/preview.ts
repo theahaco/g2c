@@ -1,6 +1,7 @@
 import { Networks, TransactionBuilder, rpc, xdr } from "@stellar/stellar-sdk";
-import { RPC_URL } from "../network.js";
+import { RPC_URL, RELAYER_SIM_SOURCE } from "../network.js";
 import { getSubmitter } from "../primaryPasskeySigner.js";
+import { relayerEnabled } from "../relayerClient.js";
 
 export type PreviewResult =
   | { ok: true; resourceFee: bigint }
@@ -24,8 +25,23 @@ export async function previewOperation(args: {
 }): Promise<PreviewResult> {
   try {
     const server = new rpc.Server(args.rpcUrl ?? RPC_URL);
-    const submitter = await getSubmitter();
-    const source = await server.getAccount(submitter.publicKey());
+    // Recording-mode simulation just needs SOME existing on-chain source
+    // account (it never signs, pays, or consumes sequence). In relayer mode use
+    // the relayer's public fund address — mirroring signAndSubmit — so no
+    // ephemeral G is friendbot-funded or persisted as `nido:name-keypair`. This
+    // also unbreaks the preview on mainnet: getSubmitter's friendbot funding is
+    // testnet-only and would throw on the public network. Classic mode
+    // (relayer disabled) keeps the friendbot-funded ephemeral submitter.
+    if (relayerEnabled() && !RELAYER_SIM_SOURCE) {
+      return {
+        ok: false,
+        error: "Relayer misconfigured: PUBLIC_RELAYER_URL is set but PUBLIC_RELAYER_SIM_SOURCE is not.",
+      };
+    }
+    const submitter = relayerEnabled() ? null : await getSubmitter();
+    const source = submitter
+      ? await server.getAccount(submitter.publicKey())
+      : await server.getAccount(RELAYER_SIM_SOURCE);
     const tx = new TransactionBuilder(source, {
       fee: "10000000",
       networkPassphrase: Networks.TESTNET,

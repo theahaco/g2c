@@ -165,7 +165,10 @@ fn initiate_recovery_within_budget() {
 
     // --- Deploy the real verifier Wasm (M0 artifact, unchanged). ---
     let vk_bytes = Bytes::from_slice(&env, include_bytes!("../../fixtures/zk/vk"));
-    let verifier_id = env.register(zk_verifier_contract::WASM, (vk_bytes,));
+    let verifier_id = env.register(
+        zk_verifier_contract::WASM,
+        (Address::generate(&env), vk_bytes),
+    );
 
     // --- Deploy the real ZkRecovery controller Wasm, pinned at CONTROLLER
     // (auth_hash's ctrl_hi/lo binds to this exact address; see
@@ -191,6 +194,7 @@ fn initiate_recovery_within_budget() {
             TIMELOCK_FLOOR_SECS,
             network_passphrase,
             webauthn_verifier,
+            Address::generate(&env), // upgrade admin (unused by this file's coverage)
         ),
     );
     let client = ZkRecoveryClient::new(&env, &contract_id);

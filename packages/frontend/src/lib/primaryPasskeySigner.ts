@@ -18,16 +18,18 @@ import {
 import { resolveSignerRule } from './policyChainFetch.js';
 import {
   relayerEnabled,
+  signatureExpirationOffset,
 } from './relayerClient';
-import { RELAYER_SIM_SOURCE, RELAYER_EXPIRATION_OFFSET } from './network';
+import { RELAYER_SIM_SOURCE } from './network';
 import { relayerSubmitAndConfirm, classicSubmitAndPoll } from './signing/submit';
 
 const RPC_URL = 'https://soroban-testnet.stellar.org';
 const FRIENDBOT_URL = 'https://friendbot.stellar.org';
 
-// RELAYER_EXPIRATION_OFFSET (relayer-mode auth-entry validity window) now lives
-// in ./network so every relayer-submitting signing path (here + walletSign)
-// shares one bound. See the comment there for the security rationale.
+// The expiration offset (relayer-mode auth-entry validity window) is computed by
+// `signatureExpirationOffset()` in ./relayerClient so every relayer-submitting
+// signing path (here + walletSign + zkRecoveryActions) shares ONE source of
+// truth, passed identically to buildAuthHash and the injector.
 
 /** localStorage key shared with `account/index.astro` so we don't
  *  proliferate ephemeral submitter accounts. */
@@ -162,7 +164,7 @@ export async function signAndSubmit(args: {
   //    and the digest the contract recomputes both refer to the same rule.
   const authEntry = getAuthEntry(successSim);
   const lastLedger = successSim.latestLedger;
-  const expirationOffset = relayerEnabled() ? RELAYER_EXPIRATION_OFFSET : undefined;
+  const expirationOffset = signatureExpirationOffset();
   const signaturePayload = buildAuthHash(authEntry, Networks.TESTNET, lastLedger, expirationOffset);
   // The signing rule was resolved up front (see resolveSignerRule above).
   const contextRuleIds = [resolved.ruleId];

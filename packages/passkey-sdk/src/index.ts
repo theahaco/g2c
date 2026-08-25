@@ -20,6 +20,7 @@ export {
   parseAssertionResponse,
   injectPasskeySignature,
   injectSignedAuthPayload,
+  DEFAULT_EXPIRATION_OFFSET,
 } from "./auth.js";
 
 export { identifyAssertionSigner } from "./assertionMatch.js";

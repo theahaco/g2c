@@ -1,3 +1,4 @@
+4cf3335c5716c9d750e9edf7f5f75c95602f42a0481920313366f9e294ff0def  contracts/vendor/ultrahonk-soroban-verifier/Cargo.toml
 eee3b03b5c12c263e8a60ca34b65d377937a1e38d5301de1f105263022865d91  contracts/vendor/ultrahonk-soroban-verifier/src/debug.rs
 71ec3200b0b6633d4bfeffad818a804aa535b16d60ec1a53b33b61033654c640  contracts/vendor/ultrahonk-soroban-verifier/src/ec.rs
 0203f8b13f8e0baa9780452f5b9263f1cc4ceac0a47ad3d5d5965f7aed26ef51  contracts/vendor/ultrahonk-soroban-verifier/src/field.rs

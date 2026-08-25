@@ -1,0 +1,67 @@
+name: Scout audit
+
+# Static security analysis of every Soroban contract crate with CoinFabrik
+# Scout (https://github.com/CoinFabrik/scout-actions). Scout runs a set of
+# Soroban-specific dylint detectors (unprotected update-current-contract-wasm,
+# unchecked arithmetic, DoS patterns, etc.) over each crate.
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Least-privilege GITHUB_TOKEN: the jobs only check out code and upload
+# artifacts, neither of which needs write access to anything.
+permissions:
+  contents: read
+
+jobs:
+  scout:
+    name: Scout (${{ matrix.contract }})
+    runs-on: ubuntu-latest
+    strategy:
+      # One contract's findings shouldn't hide another's -- run all to
+      # completion so the Checks tab shows the full per-contract picture.
+      fail-fast: false
+      matrix:
+        # Every crate under contracts/ EXCEPT contracts/vendor: the vendored
+        # UltraHonk verifier is upstream code we don't maintain (it's likewise
+        # excluded from `cargo test --workspace` in test.yml), so auditing it
+        # here would only produce findings we can't act on.
+        contract:
+          - factory
+          - multisig-policy
+          - name-registry
+          - smart-account
+          - spending-limit-policy
+          - status-message
+          - webauthn-verifier
+          - zk-recovery
+          - zk-verifier
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+
+      # The action builds a Docker image with the Scout toolchain, mounts the
+      # whole workspace into it, and runs `cargo scout-audit` from
+      # `working_directory`. Mounting the full checkout (not just the crate
+      # dir) matters: these crates are workspace members, so resolving their
+      # dependencies needs the root Cargo.toml/Cargo.lock.
+      # Note the action's real input is `working_directory` -- the marketplace
+      # README's `target:` example is stale and silently ignored.
+      - name: Run Scout
+        id: scout
+        uses: coinfabrik/scout-actions@6f5e53f890c1fe20c9b08369aec4f183a5b710b2 # v3.2
+        with:
+          working_directory: contracts/${{ matrix.contract }}
+
+      # The action writes its markdown report under scout-report/ and, on
+      # findings, drops a FAIL marker and exits non-zero (fail_on_error
+      # defaults to true). `always()` so the report is available precisely
+      # when the step failed -- that's when someone needs to read it.
+      - name: Upload Scout report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: scout-report-${{ matrix.contract }}
+          path: scout-report/
+          retention-days: 7

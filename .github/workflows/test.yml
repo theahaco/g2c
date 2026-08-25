@@ -16,11 +16,13 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
-      # No rust-toolchain.toml pin in this repo -- `stable` matches local dev.
+      # Pinned to match the workspace-root rust-toolchain.toml (keep the two in
+      # lockstep) so contract wasm bytecode is reproducible rather than built
+      # against whatever `stable` happens to be on the runner that day.
       # `wasm32v1-none` is the target `just build-contracts`/`cargo build
       # --target wasm32v1-none` compiles the contract wasms for.
       - name: Install Rust toolchain
-        uses: dtolnay/rust-toolchain@stable
+        uses: dtolnay/rust-toolchain@1.96.0
         with:
           targets: wasm32v1-none
 
@@ -83,9 +85,13 @@ jobs:
       # budget in-process (see their module docs) rather than depending on
       # any CI-specific configuration.
       # Exclude the vendored UltraHonk verifier crate: its upstream tests read
-      # fixture files we don't vendor ("No such file or directory" on a clean
-      # checkout). nido exercises the verifier through its own integration
-      # tests (crates/integration-tests), which run here.
+      # fixture files (circuits/*/target/) we don't vendor -> "No such file or
+      # directory" on a clean checkout. This is documented indirect coverage,
+      # NOT a gap: nido runs the SAME simple_circuit known-answer fixtures
+      # through the identical UltraHonkVerifier code path at the contract
+      # boundary (contracts/zk-verifier/tests/verifier_smoke.rs) plus 14
+      # real-`bb prove` zk_recovery_* integration tests. See the `test` recipe
+      # in justfile and docs/SECURITY_INVARIANTS.md "Vendored verifier coverage".
       - name: cargo test --workspace
         run: cargo test --workspace --exclude ultrahonk_soroban_verifier
 
@@ -209,3 +215,44 @@ jobs:
       # diff instead of a binary-blob one.
       - name: Fail on fixture drift
         run: git diff --exit-code crates/integration-tests/fixtures/zk/manifest.json
+
+  security-audit:
+    name: Dependency audit (advisory)
+    runs-on: ubuntu-latest
+    # ADVISORY, non-blocking for now (every step is continue-on-error) so a
+    # freshly-published advisory in a transitive dep can't red-wall unrelated
+    # PRs. Triage the findings, then flip these to gating before mainnet (see
+    # docs/SUPPLY_CHAIN.md). Dependabot (.github/dependabot.yml) opens the
+    # actual update PRs; this job is the at-a-glance "any known CVEs right now"
+    # signal in the Checks tab.
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install Rust toolchain
+        uses: dtolnay/rust-toolchain@stable
+
+      # cargo-audit reads Cargo.lock against the RustSec advisory DB -- no
+      # workspace build needed, so this is fast.
+      - name: Install cargo-audit
+        uses: taiki-e/install-action@v2
+        with:
+          tool: cargo-audit
+
+      - name: cargo audit (advisory)
+        continue-on-error: true
+        run: cargo audit
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      # npm audit works straight off each committed package-lock.json (no
+      # install needed). Loop the authored roots; keep going on findings.
+      - name: npm audit (advisory)
+        continue-on-error: true
+        run: |
+          for d in . packages/passkey-sdk packages/frontend packages/stellar-wallets-kit-module \
+                   infra/nido-resolver infra/pool-indexer infra/recovery-relay; do
+            echo "== npm audit: $d =="
+            (cd "$d" && npm audit --audit-level=high) || true
+          done

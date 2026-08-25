@@ -13,6 +13,7 @@ doctest = false
 soroban-sdk = { workspace = true }
 stellar-accounts = { workspace = true }
 soroban-sdk-tools = { workspace = true }
+admin-sep = { workspace = true }
 stellar-registry.workspace = true
 # Build-order edge only: the factory embeds the smart-account WASM via
 # `include_bytes!` in build.rs and must never `use` any item from this crate.

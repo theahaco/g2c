@@ -48,8 +48,7 @@ import {
   fetchDefaultRuleAuthInfo,
   type DefaultRuleAuthInfo,
 } from './policyChainFetch.js';
-import { relayerEnabled } from './relayerClient';
-import { RELAYER_EXPIRATION_OFFSET } from './network';
+import { signatureExpirationOffset } from './relayerClient';
 
 const RPC_URL = 'https://soroban-testnet.stellar.org';
 
@@ -187,7 +186,7 @@ export async function signTransactionXdr(args: {
   // a relayer holding the body can't replay it for ~14h. The offset MUST be
   // identical between buildAuthHash and the injector(s) or the digest the
   // contract recomputes won't match this signature.
-  const expirationOffset = relayerEnabled() ? RELAYER_EXPIRATION_OFFSET : undefined;
+  const expirationOffset = signatureExpirationOffset();
   const signaturePayload = buildAuthHash(authEntry, networkPassphrase, lastLedger, expirationOffset);
   const contextRuleIds = [resolved.ruleId];
   const challengeBytes = computeAuthDigest(signaturePayload, contextRuleIds);

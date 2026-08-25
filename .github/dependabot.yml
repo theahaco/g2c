@@ -1,0 +1,32 @@
+# Dependency update + vulnerability alerts for the audit-readiness push.
+# Covers the authored surface (workspace crates, the published SDK, the
+# frontend, and the off-chain workers) + the CI actions themselves. Generated
+# contract-bindings and the self-contained examples/ project are intentionally
+# left out.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: cargo
+    directory: /
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5
+
+  - package-ecosystem: npm
+    directories:
+      - /
+      - /packages/passkey-sdk
+      - /packages/frontend
+      - /packages/stellar-wallets-kit-module
+      - /infra/nido-resolver
+      - /infra/pool-indexer
+      - /infra/recovery-relay
+      - /infra/relayer/plugins/channels
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 5

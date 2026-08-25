@@ -3,6 +3,7 @@
 //! rule_id)` threshold lives in the contract's persistent storage as managed
 //! by the library.
 
+use admin_sep::{Administratable, Upgradable};
 use soroban_sdk::auth::Context;
 use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
 use stellar_accounts::policies::simple_threshold::{self, SimpleThresholdAccountParams};
@@ -12,8 +13,27 @@ use stellar_accounts::smart_account::{ContextRule, Signer};
 #[contract]
 pub struct MultisigPolicy;
 
+// Governance (issue #26): admin/set_admin/upgrade come from the shared
+// `admin-sep` crate (`Administratable` + `Upgradable`), replacing the inlined
+// boilerplate. The `enforce`/`install`/`uninstall` paths never read admin, so
+// per-account policy state and gas are unaffected. Mainnet intent (plan B1):
+// `admin` is a multisig, ideally behind an upgrade timelock.
+#[contractimpl(contracttrait)]
+impl Administratable for MultisigPolicy {}
+
+#[contractimpl(contracttrait)]
+impl Upgradable for MultisigPolicy {}
+
 #[contractimpl]
 impl MultisigPolicy {
+    /// Record the `admin` (mainnet: multisig, ideally behind an upgrade
+    /// timelock) authorized to rotate the admin or upgrade this policy (issue
+    /// #26). `set_admin` on first call (no admin yet) skips the auth check.
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn __constructor(e: Env, admin: Address) {
+        Self::set_admin(&e, admin);
+    }
+
     /// Read the installed M-of-N threshold for a given account + rule.
     /// Returns 0 if not installed.
     #[must_use]
@@ -67,10 +87,27 @@ mod test {
     use soroban_sdk::String;
     use stellar_accounts::smart_account::{ContextRuleType, Signer};
 
+    /// Upgradability (issue #26): the constructor stores the `admin`, and
+    /// `set_admin` rotates it under the current admin's auth.
+    #[test]
+    fn admin_is_stored_and_rotatable() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        let id = env.register(MultisigPolicy, (admin.clone(),));
+        let client = MultisigPolicyClient::new(&env, &id);
+
+        assert_eq!(client.admin(), admin);
+
+        let new_admin = Address::generate(&env);
+        client.set_admin(&new_admin);
+        assert_eq!(client.admin(), new_admin);
+    }
+
     #[test]
     fn install_stores_threshold_per_account_rule() {
         let env = Env::default();
-        let policy_addr = env.register(MultisigPolicy, ());
+        let policy_addr = env.register(MultisigPolicy, (Address::generate(&env),));
         let account = Address::generate(&env);
         let rule_id = 7u32;
         let threshold = 2u32;

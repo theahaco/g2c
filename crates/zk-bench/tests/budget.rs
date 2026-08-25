@@ -49,7 +49,7 @@
 //! further purely to get a diagnostic number for the report, and the
 //! assertion below would still fail loudly against `MAX_VERIFY_CPU`.
 
-use soroban_sdk::{Bytes, Env};
+use soroban_sdk::{testutils::Address as _, Address, Bytes, Env};
 
 mod v {
     // Path is relative to CARGO_MANIFEST_DIR (crates/zk-bench/). The wasm is
@@ -109,7 +109,7 @@ fn verify_proof_within_budget() {
     // Register the real compiled Wasm module (not a native test-contract),
     // so verify_proof runs through the metered Wasm VM / host-function
     // path -- this measures the real on-chain cost.
-    let id = env.register(v::WASM, (vk,));
+    let id = env.register(v::WASM, (Address::generate(&env), vk));
     let client = v::Client::new(&env, &id);
 
     client.verify_proof(&pubs, &proof);

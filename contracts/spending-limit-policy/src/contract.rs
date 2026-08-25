@@ -4,6 +4,7 @@
 //! persistent storage as managed by the library. Meters SAC `transfer`
 //! calls within `CallContract` contexts only.
 
+use admin_sep::{Administratable, Upgradable};
 use soroban_sdk::auth::Context;
 use soroban_sdk::{contract, contractimpl, Address, Env, Vec};
 use stellar_accounts::policies::spending_limit::{
@@ -15,8 +16,27 @@ use stellar_accounts::smart_account::{ContextRule, Signer};
 #[contract]
 pub struct SpendingLimitPolicy;
 
+// Governance (issue #26): admin/set_admin/upgrade come from the shared
+// `admin-sep` crate (`Administratable` + `Upgradable`), replacing the inlined
+// boilerplate. The `enforce`/`install`/`uninstall` paths never read admin, so
+// per-account limit state and gas are unaffected. Mainnet intent (plan B1):
+// `admin` is a multisig, ideally behind an upgrade timelock.
+#[contractimpl(contracttrait)]
+impl Administratable for SpendingLimitPolicy {}
+
+#[contractimpl(contracttrait)]
+impl Upgradable for SpendingLimitPolicy {}
+
 #[contractimpl]
 impl SpendingLimitPolicy {
+    /// Record the `admin` (mainnet: multisig, ideally behind an upgrade
+    /// timelock) authorized to rotate the admin or upgrade this policy (issue
+    /// #26). `set_admin` on first call (no admin yet) skips the auth check.
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn __constructor(e: Env, admin: Address) {
+        Self::set_admin(&e, admin);
+    }
+
     /// Read the installed params for a given account + rule. Returns None if
     /// not installed. (The OZ lib's `get_spending_limit_data` panics when
     /// uninstalled; read its storage key directly instead. Archived entries
@@ -110,10 +130,27 @@ mod test {
     use soroban_sdk::String;
     use stellar_accounts::smart_account::{ContextRuleType, Signer};
 
+    /// Upgradability (issue #26): the constructor stores the `admin`, and
+    /// `set_admin` rotates it under the current admin's auth.
+    #[test]
+    fn admin_is_stored_and_rotatable() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        let id = env.register(SpendingLimitPolicy, (admin.clone(),));
+        let client = SpendingLimitPolicyClient::new(&env, &id);
+
+        assert_eq!(client.admin(), admin);
+
+        let new_admin = Address::generate(&env);
+        client.set_admin(&new_admin);
+        assert_eq!(client.admin(), new_admin);
+    }
+
     #[test]
     fn install_stores_params_per_account_rule() {
         let env = Env::default();
-        let policy_addr = env.register(SpendingLimitPolicy, ());
+        let policy_addr = env.register(SpendingLimitPolicy, (Address::generate(&env),));
         let account = Address::generate(&env);
         let rule_id = 7u32;
         let params = SpendingLimitAccountParams {

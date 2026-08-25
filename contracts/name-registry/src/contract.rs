@@ -1,3 +1,4 @@
+use admin_sep::{Administratable, Upgradable};
 use soroban_sdk::{contract, contractimpl, Address, Env, String};
 use soroban_sdk_tools::{contractstorage, PersistentMap};
 
@@ -9,6 +10,16 @@ pub struct Registry {
 
 #[contract]
 pub struct Contract;
+
+// Governance (issue #26): admin/set_admin/upgrade come from the shared
+// `admin-sep` crate (`Administratable` + `Upgradable`), replacing the inlined
+// boilerplate. Name records are untouched by admin storage. Mainnet intent
+// (plan B1): `admin` is a multisig, ideally behind an upgrade timelock.
+#[contractimpl(contracttrait)]
+impl Administratable for Contract {}
+
+#[contractimpl(contracttrait)]
+impl Upgradable for Contract {}
 
 fn validate_name(e: &Env, name: &String) {
     let len = name.len() as usize;
@@ -31,6 +42,15 @@ fn validate_name(e: &Env, name: &String) {
 
 #[contractimpl]
 impl Contract {
+    /// Record the `admin` (mainnet: multisig, ideally behind an upgrade
+    /// timelock) authorized to rotate the admin or upgrade this registry
+    /// (issue #26). Name records are untouched by admin storage. `set_admin`
+    /// on first call (no admin yet) skips the auth check.
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn __constructor(e: Env, admin: Address) {
+        Self::set_admin(&e, admin);
+    }
+
     /// Register a human-readable name for a smart account.
     /// The owner (smart account address) must authorize the call.
     pub fn register(e: &Env, owner: &Address, name: &String) {
@@ -109,9 +129,26 @@ mod test {
     fn setup() -> (Env, ContractClient<'static>) {
         let env = Env::default();
         env.mock_all_auths();
-        let id = env.register(Contract, ());
+        let id = env.register(Contract, (Address::generate(&env),));
         let client = ContractClient::new(&env, &id);
         (env, client)
+    }
+
+    /// Upgradability (issue #26): the constructor stores the `admin`, and
+    /// `set_admin` rotates it under the current admin's auth.
+    #[test]
+    fn admin_is_stored_and_rotatable() {
+        let env = Env::default();
+        env.mock_all_auths();
+        let admin = Address::generate(&env);
+        let id = env.register(Contract, (admin.clone(),));
+        let client = ContractClient::new(&env, &id);
+
+        assert_eq!(client.admin(), admin);
+
+        let new_admin = Address::generate(&env);
+        client.set_admin(&new_admin);
+        assert_eq!(client.admin(), new_admin);
     }
 
     #[test]

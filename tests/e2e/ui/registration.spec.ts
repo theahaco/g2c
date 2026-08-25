@@ -17,6 +17,15 @@ const NEW_ACCOUNT_URL =
   `?key=SDTEST7777777777777777777777777777777777777777777777`;
 
 test.describe('passkey registration (shim) @fast', () => {
+  // A2: a legacy setup secret passed in the QUERY string (?key=/?salt=) must be
+  // read and then scrubbed from the URL, so it does not linger in history /
+  // Referer. New links carry the salt in the hash (never sent to the server) —
+  // see createNido(). Here we load with the legacy ?key= and assert it's gone.
+  test('a query-string setup secret is scrubbed from the URL @fast', async ({ page }) => {
+    await page.goto(NEW_ACCOUNT_URL);
+    await expect.poll(() => new URL(page.url()).search).not.toContain('key=');
+  });
+
   test('shim is installed before page scripts @fast', async ({ page }) => {
     await page.goto(NEW_ACCOUNT_URL);
 

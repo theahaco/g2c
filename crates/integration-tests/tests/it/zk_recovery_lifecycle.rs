@@ -42,6 +42,14 @@ mod zk_verifier_contract {
 /// with `timelock_secs = 1_209_600` bound into `auth_hash`, and
 /// `initiate_recovery` requires `timelock_secs == config.delay_secs`
 /// exactly (spec §3.3 check 5).
+///
+/// NOTE: these are the **mainnet production** parameters (delay 14d, completion
+/// window 30d, timelock floor 7d -- spec §3.3 "Defaults"), NOT the current
+/// testnet pool's tuned-down values (delay 60s). So the full recovery
+/// lifecycle proven here and in `zk_recovery_e2e.rs` (initiate -> wait timelock
+/// -> complete, plus cancel and revoke) already runs under mainnet timing. The
+/// A1 blocker is purely that the LIVE testnet pool was *deployed* with
+/// testnet params; the contract logic itself is exercised at mainnet params.
 const DELAY_SECS: u64 = zk_fixture::TIMELOCK_SECS as u64;
 const COMPLETION_WINDOW_SECS: u64 = 30 * 24 * 3600;
 const MAX_CANCELS: u32 = 2;
@@ -67,13 +75,31 @@ fn hex32(s: &str) -> [u8; 32] {
 /// known root call `insert_fixture_leaf` afterwards.
 fn deploy(env: &Env) -> (ZkRecoveryClient<'_>, Address, LifecycleFixture) {
     let fixture = zk_fixture::lifecycle_fixture(env);
+    let passphrase = Bytes::from_slice(env, fixture.network_passphrase.as_bytes());
+    let client = deploy_with_passphrase(env, &fixture, &passphrase);
+    let account = addr_from(env, &fixture.account);
+    (client, account, fixture)
+}
 
+/// Core of [`deploy`]: registers the M0 verifier (real wasm + M0 vk) and
+/// `ZkRecovery` pinned at `fixture.controller`, configured with `passphrase`
+/// as the pool's `network_passphrase`. Split out so the cross-network replay
+/// test (`wrong_network_passphrase_proof_is_rejected`) can pin a DIFFERENT
+/// passphrase than the one the fixture proof was generated against -- every
+/// other caller passes the fixture's own passphrase via [`deploy`].
+fn deploy_with_passphrase<'a>(
+    env: &'a Env,
+    fixture: &LifecycleFixture,
+    passphrase: &Bytes,
+) -> ZkRecoveryClient<'a> {
     let vk_bytes = Bytes::from_slice(env, include_bytes!("../../fixtures/zk/vk"));
-    let verifier_id = env.register(zk_verifier_contract::WASM, (vk_bytes,));
+    let verifier_id = env.register(
+        zk_verifier_contract::WASM,
+        (Address::generate(env), vk_bytes),
+    );
 
     let controller_addr = addr_from(env, &fixture.controller);
     let factory = Address::generate(env);
-    let network_passphrase = Bytes::from_slice(env, fixture.network_passphrase.as_bytes());
     // Unused by this file's proof-only (`initiate_recovery`/`cancel_recovery`/
     // `burn_nullifier`) coverage -- only `policy.rs::enforce` (M1 Task 7,
     // `zk_recovery_completion.rs`) reads `config.webauthn_verifier`.
@@ -89,14 +115,12 @@ fn deploy(env: &Env) -> (ZkRecoveryClient<'_>, Address, LifecycleFixture) {
             COMPLETION_WINDOW_SECS,
             MAX_CANCELS,
             TIMELOCK_FLOOR_SECS,
-            network_passphrase,
+            passphrase.clone(),
             webauthn_verifier,
+            Address::generate(env), // upgrade admin (unused by this file's coverage)
         ),
     );
-    let client = ZkRecoveryClient::new(env, &contract_id);
-
-    let account = addr_from(env, &fixture.account);
-    (client, account, fixture)
+    ZkRecoveryClient::new(env, &contract_id)
 }
 
 /// Inserts the fixture's leaf (`leaf_inner(secret)`, wrapped by the pool
@@ -397,6 +421,128 @@ fn tampered_new_pubkey_fails_proof_verification() {
         &proof,
     );
     assert_eq!(contract_error(&res), RecoveryError::VerificationFailed);
+}
+
+/// Cross-network replay: a proof generated against the TESTNET passphrase
+/// must NOT verify against a pool configured for a DIFFERENT network (here,
+/// the Stellar *mainnet* passphrase). `initiate_recovery` folds
+/// `sha256(config.network_passphrase)` into the `auth_hash` it recomputes and
+/// checks the proof against (`hash::compute_auth_hash`, the `npass_hi/lo`
+/// inputs mirroring `main.nr:40-42`), so the real fixture proof -- valid on
+/// testnet -- surfaces `VerificationFailed` here. This is the invariant that
+/// stops a recovery proof captured on one network from being replayed against
+/// a deployment on another (`SECURITY_INVARIANTS`: keccak transcript /
+/// `auth_hash` domain binding). Everything BEFORE proof verification
+/// (root/nonce/timelock/nullifier) is identical to the happy path and passes
+/// -- only the passphrase differs -- so the rejection is attributable solely
+/// to the passphrase bind.
+#[test]
+fn wrong_network_passphrase_proof_is_rejected() {
+    // The Stellar *mainnet* passphrase -- differs from the fixture's
+    // "Test SDF Network ; September 2015", so sha256(passphrase), and hence
+    // the recomputed auth_hash, differ from the proof's committed value.
+    const MAINNET_PASS: &[u8] = b"Public Global Stellar Network ; September 2015";
+
+    let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
+
+    let fixture = zk_fixture::lifecycle_fixture(&env);
+    assert_ne!(
+        fixture.network_passphrase.as_bytes(),
+        MAINNET_PASS,
+        "sanity: the override passphrase must differ from the fixture's"
+    );
+    let wrong_pass = Bytes::from_slice(&env, MAINNET_PASS);
+    let client = deploy_with_passphrase(&env, &fixture, &wrong_pass);
+    let account = addr_from(&env, &fixture.account);
+    // Root is a pure function of the leaf (passphrase-independent), so the
+    // fixture leaf still reproduces `fixture.root` and the root check passes.
+    insert_fixture_leaf(&env, &client, &account, &fixture);
+
+    let new_pubkey = BytesN::from_array(&env, &fixture.new_pubkey);
+    let root = BytesN::from_array(&env, &fixture.root);
+    let nullifier = BytesN::from_array(&env, &fixture.nullifier);
+    let proof = Bytes::from_slice(&env, &fixture.proof);
+
+    let res = client.try_initiate_recovery(
+        &account,
+        &new_pubkey,
+        &fixture.nonce,
+        &fixture.timelock_secs,
+        &root,
+        &nullifier,
+        &proof,
+    );
+    assert_eq!(
+        contract_error(&res),
+        RecoveryError::VerificationFailed,
+        "a proof bound to the testnet passphrase must not verify against a \
+         pool configured with the mainnet passphrase"
+    );
+}
+
+/// Malformed proof bytes (empty, and truncated to a non-empty prefix of a
+/// real proof) must NEVER yield a pending recovery. All the pre-verification
+/// checks (root/nonce/timelock/nullifier) pass -- the ONLY defect is the
+/// proof itself -- so a successful call would mean the verifier accepted
+/// garbage. The security property is fail-closed: the call must error and no
+/// pending/nullifier state may be written. (Whether the vendored `UltraHonk`
+/// verifier surfaces this as a clean `VerificationFailed` contract error or a
+/// host-side trap on a length assertion is an implementation detail hardened
+/// separately in workstream E -- "return a structured error instead of
+/// `assert_eq!` on a truncated proof"; this test pins the invariant that
+/// matters for funds either way: no malformed proof ever initiates recovery.)
+#[test]
+fn malformed_proof_never_initiates_recovery() {
+    let env = Env::default();
+    env.cost_estimate().budget().reset_unlimited();
+    let (client, account, fixture) = setup(&env);
+
+    let new_pubkey = BytesN::from_array(&env, &fixture.new_pubkey);
+    let root = BytesN::from_array(&env, &fixture.root);
+    let nullifier = BytesN::from_array(&env, &fixture.nullifier);
+
+    // A non-empty prefix of the real proof (structurally proof-shaped but
+    // truncated) and the empty proof.
+    let truncated = Bytes::from_slice(&env, &fixture.proof[..fixture.proof.len() / 2]);
+    let empty = Bytes::from_slice(&env, &[]);
+
+    for bad_proof in [truncated, empty] {
+        let res = client.try_initiate_recovery(
+            &account,
+            &new_pubkey,
+            &fixture.nonce,
+            &fixture.timelock_secs,
+            &root,
+            &nullifier,
+            &bad_proof,
+        );
+        // Assert the SPECIFIC error, not just "some error": zk-recovery maps any
+        // verifier failure -- including the zk-verifier's structured
+        // ProofParseError on a bad-length proof -- to VerificationFailed, so a
+        // malformed proof is rejected exactly like a well-formed-but-invalid one.
+        assert_eq!(
+            contract_error(&res),
+            RecoveryError::VerificationFailed,
+            "a malformed proof must be rejected as VerificationFailed"
+        );
+
+        // Fail-closed: no pending record and no nullifier reservation may
+        // have been written by the rejected call.
+        assert!(
+            client.get_pending(&account).is_none(),
+            "a rejected malformed-proof initiate must not leave a pending record"
+        );
+        let state: Option<NullifierState> = env.as_contract(&client.address, || {
+            env.storage()
+                .persistent()
+                .get(&RecoveryKey::Nullifier(nullifier.clone()))
+        });
+        assert!(
+            state.is_none(),
+            "a rejected malformed-proof initiate must not reserve the nullifier"
+        );
+    }
 }
 
 /// Regression for the M1 Task 5 liveness bug: `initiate_recovery`'s

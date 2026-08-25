@@ -28,7 +28,9 @@ export function accountShareLabel(host: string, nameOrId: string): string {
  *  `//bob.alice.localhost/`); production hosts are unaffected. */
 export function nidoRowHref(host: string, row: MyNidoRow): string {
   if (row.status === "pending") {
-    return accountUrl(host, row.contractId, `/new-account/?salt=${encodeURIComponent(row.resumeKey ?? "")}`);
+    // A2: resume key is the setup secret — carry it in the hash, not the query
+    // (never sent to the server; kept out of worker/CDN logs + Referer).
+    return accountUrl(host, row.contractId, `/new-account/#salt=${encodeURIComponent(row.resumeKey ?? "")}`);
   }
   return accountShareUrl(host, row.name ?? row.contractId);
 }

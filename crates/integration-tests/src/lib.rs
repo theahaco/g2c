@@ -3,6 +3,7 @@ use base64::Engine;
 use p256::ecdsa::signature::hazmat::PrehashSigner;
 use p256::ecdsa::{Signature, SigningKey};
 use sha2::{Digest, Sha256};
+use soroban_sdk::testutils::Address as _;
 use stellar_accounts::policies::simple_threshold::SimpleThresholdAccountParams;
 use stellar_accounts::policies::spending_limit::SpendingLimitAccountParams;
 use stellar_accounts::smart_account::{ContextRule, ContextRuleType, Signer};
@@ -194,8 +195,11 @@ pub fn deploy_smart_account_with_recovery<'a>(
     soroban_sdk::Address,
     SigningKey,
 ) {
-    // Deploy the stateless WebAuthn verifier
-    let verifier_addr = env.register(WEBAUTHN_VERIFIER_WASM, ());
+    // Deploy the stateless WebAuthn verifier (admin governs upgrade only)
+    let verifier_addr = env.register(
+        WEBAUTHN_VERIFIER_WASM,
+        (soroban_sdk::Address::generate(env),),
+    );
 
     // Generate a passkey (P-256 keypair)
     let signing_key = SigningKey::random(&mut p256::elliptic_curve::rand_core::OsRng);
@@ -222,7 +226,7 @@ pub fn deploy_smart_account_with_recovery<'a>(
 /// Deploy the multisig policy contract and return its address.
 #[must_use]
 pub fn deploy_multisig_policy(env: &soroban_sdk::Env) -> soroban_sdk::Address {
-    env.register(MULTISIG_POLICY_WASM, ())
+    env.register(MULTISIG_POLICY_WASM, (soroban_sdk::Address::generate(env),))
 }
 
 /// Build the `policies` map for `add_context_rule` containing a single
@@ -244,7 +248,10 @@ pub fn multisig_install_map(
 /// Deploy the spending-limit policy contract and return its address.
 #[must_use]
 pub fn deploy_spending_limit_policy(env: &soroban_sdk::Env) -> soroban_sdk::Address {
-    env.register(SPENDING_LIMIT_POLICY_WASM, ())
+    env.register(
+        SPENDING_LIMIT_POLICY_WASM,
+        (soroban_sdk::Address::generate(env),),
+    )
 }
 
 /// Build the `policies` map for `add_context_rule` containing a single

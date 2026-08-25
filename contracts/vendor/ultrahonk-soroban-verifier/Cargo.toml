@@ -24,7 +24,8 @@ once_cell = { version = "1.19", default-features = false, features = [
     "race",
 ] }
 # Retargeted from upstream git rev 3b031847eb043856cc5bcad45bd5a6512370cd16
-# onto nido's workspace soroban-sdk = "26.0.1" (see task-1-brief.md).
+# onto nido's workspace soroban-sdk = "27.0.2" (resolves 27.0.5, per the
+# sdk 26->27 bump; was "26.0.1"). See task-1-brief.md.
 # (No explicit `default-features`: the workspace dependency itself does not
 # set it, and cargo warns/will hard-error if a member overrides it locally.)
 soroban-sdk = { workspace = true }

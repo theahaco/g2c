@@ -10,6 +10,11 @@ FROM ubuntu:24.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV NOIR_VERSION=1.0.0-beta.18
+# Keep in lockstep with REQUIRED_BB_VERSION in gen_artifacts.sh. bbup resolves bb
+# from the noir version via a mapping that lives in the (unpinned) upstream bbup
+# script, so the resolved bb is asserted below -- a mapping/installer drift fails
+# the image build here instead of silently changing the VK/proof.
+ENV BB_VERSION=3.0.0-nightly.20260102
 
 RUN apt-get update -qq && \
     apt-get install -y -qq --no-install-recommends \
@@ -24,6 +29,13 @@ RUN curl -L https://raw.githubusercontent.com/noir-lang/noirup/main/install | ba
 RUN curl -L https://raw.githubusercontent.com/AztecProtocol/aztec-packages/master/barretenberg/bbup/install | bash && \
     /root/.bb/bbup -nv ${NOIR_VERSION}
 
-RUN nargo --version && bb --version || true
+# Fail the build (do NOT swallow with `|| true`) if the resolved toolchain drifts
+# from the pins: a silent bb/nargo change would produce a different VK/proof for
+# byte-identical ACIR. Mirrors gen_artifacts.sh's REQUIRED_BB_VERSION guard.
+RUN set -eu; \
+    nargo --version | grep -qF "${NOIR_VERSION}" \
+      || { echo "[!] nargo mismatch: want ${NOIR_VERSION}, got $(nargo --version 2>&1)" >&2; exit 1; }; \
+    bb --version | grep -qF "${BB_VERSION}" \
+      || { echo "[!] bb mismatch: want ${BB_VERSION}, got $(bb --version 2>&1)" >&2; exit 1; }
 
 WORKDIR /work

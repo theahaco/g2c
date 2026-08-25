@@ -144,6 +144,29 @@ export function safeRouteUrl(url: string | null | undefined, base: string): stri
   }
 }
 
+/** Normalise an absolute URL to its ORIGIN iff it is a usable dApp origin:
+ *  https anywhere, or http only for localhost/127.0.0.1 (dev). Returns null for
+ *  malformed, relative, or disallowed-scheme (`javascript:`/`data:`/…) inputs.
+ *
+ *  Unlike `safeRouteUrl`, this deliberately does NOT restrict to the same
+ *  parent domain — a dApp is legitimately a FOREIGN origin. It only enforces a
+ *  well-formed http(s) scheme, so it is the right check for the cross-app
+ *  signing return, where `safeRouteUrl`'s same-parent-domain rule would wrongly
+ *  reject every real dApp. */
+export function httpOrigin(url: string | null | undefined): string | null {
+  if (!url) return null;
+  try {
+    const u = new URL(url);
+    if (u.protocol === "https:") return u.origin;
+    if (u.protocol === "http:" && (u.hostname === "localhost" || u.hostname === "127.0.0.1")) {
+      return u.origin;
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 export function signRequestFromParams(params: URLSearchParams, account: string | null): SignRequest | null {
   if (!account) return null;
   const kind = params.get("kind") ?? "tx";
@@ -153,6 +176,21 @@ export function signRequestFromParams(params: URLSearchParams, account: string |
   if (!xdr || !dapp) return null;
   const ret = params.get("return") ?? undefined;
   const network = params.get("network") ?? undefined;
+
+  // Validate the dApp origin + return at the SOURCE (defence in depth — the
+  // /sign/ page re-validates the same way at consume time). A dApp is a foreign
+  // origin by design, so `safeRouteUrl` does NOT apply here; instead require:
+  //   - `dapp` is a well-formed http(s) origin (rejects javascript:/data:/malformed);
+  //   - if a `return` URL is given, it is SAME-ORIGIN as `dapp`.
+  // This closes the spoof-origin / exfiltrate-signature vector (a page passing
+  // dapp=<trusted>&return=<attacker> so /sign/ displays the trusted name while
+  // the signature is posted to the attacker): the mismatch is rejected right
+  // here, so a hostile SignRequest is never stashed in the first place. The
+  // normalised origin (not the raw param) is what gets displayed downstream.
+  const origin = httpOrigin(dapp);
+  if (!origin) return null;
+  if (ret !== undefined && httpOrigin(ret) !== origin) return null;
+
   return {
     v: 1, kind: "dapp-tx", account,
     operation: { type: "raw-xdr", xdr },
@@ -162,7 +200,7 @@ export function signRequestFromParams(params: URLSearchParams, account: string |
     // sentence, or the copy doubles ("…sign a <dapp> wants this account to…").
     subtitle: "transaction",
     submitMode: "return-to-dapp",
-    returnTarget: { type: "dapp", origin: dapp, returnUrl: ret },
+    returnTarget: { type: "dapp", origin, returnUrl: ret },
     networkPassphrase: network,
   };
 }

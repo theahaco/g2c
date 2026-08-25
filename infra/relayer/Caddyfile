@@ -1,6 +1,9 @@
 {
 	admin off
 	persist_config off
+	# caddy-ratelimit is an HTTP handler module; give it an explicit order so it
+	# runs before the request is proxied to the relayer.
+	order rate_limit before reverse_proxy
 }
 
 :8080 {
@@ -20,6 +23,30 @@
 		path /relay
 	}
 	handle @relay {
+		# Per-client fairness: a token bucket keyed on the REAL client IP (Caddy
+		# sits behind Fly's proxy, so `{remote_host}` is Fly's edge -- use the
+		# Fly-Client-IP header instead). One shared x-api-key + one global
+		# FEE_LIMIT means a single flooding client could otherwise drain the
+		# daily sponsor budget; capping each IP to a sane relay rate raises the
+		# cost of doing so. 30 relays/min/IP is far above a real wallet's usage (a
+		# few relays per onboarding/recovery) and well under the relayer's global
+		# 20 req/s ceiling.
+		#
+		# TRUST ASSUMPTION (verify on Fly): this is only sound if fly-proxy SETS
+		# (overwrites) Fly-Client-IP on inbound public traffic. If a client could
+		# supply its own Fly-Client-IP it would rotate the header per request and
+		# defeat the bucket -- confirm fly-proxy strips any inbound copy. Even
+		# trusted, per-IP keying is evadable by an attacker with an IPv6 /64
+		# (billions of source addresses), so the GLOBAL FEE_LIMIT (100 XLM/24h) is
+		# the true drain backstop; this limiter raises the cost of abuse, it is not
+		# a hard per-client fee guarantee.
+		rate_limit {
+			zone relay_per_ip {
+				key {http.request.header.Fly-Client-IP}
+				events 30
+				window 1m
+			}
+		}
 		header Access-Control-Allow-Origin "*"
 		request_header Authorization "Bearer {$API_KEY}"
 		request_header x-api-key "nido-wallet"

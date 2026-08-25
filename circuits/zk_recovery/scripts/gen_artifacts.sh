@@ -14,6 +14,13 @@ export PATH="$HOME/.nargo/bin:$HOME/.bb:${SCRIPT_DIR}:${PATH}"
 cd "${PROJECT_ROOT}"
 
 REQUIRED_NARGO_VERSION="1.0.0-beta.18"
+# The exact bb (Barretenberg) build the deployed VK/proof fixtures were
+# generated against. bbup resolves a bb version from the nargo version, but
+# that mapping lives in AztecProtocol's installer (outside this repo) and can
+# move, so we pin + hard-check the resolved bb below rather than trusting the
+# nargo pin to imply it. Bump this in lockstep with REQUIRED_NARGO_VERSION and
+# regenerate + re-record the fixtures whenever it changes.
+REQUIRED_BB_VERSION="3.0.0-nightly.20260102"
 PROJECT_NAME="zk_recovery"
 
 NARGO_BIN="${NARGO:-$(command -v nargo || echo "${HOME}/.nargo/bin/nargo")}"
@@ -102,6 +109,24 @@ if ! bb_native_ok; then
   fi
 fi
 
+# Pin the resolved bb build, mirroring the nargo guard above. bb's
+# proof-system internals -- including the evm-no-zk -> keccak oracle mapping
+# the on-chain verifier depends on (see the --oracle_hash note below) -- can
+# change between builds even for byte-identical ACIR, so a silent bbup drift
+# would emit a different VK/proof that still passes every other check here.
+# Capture the resolved version once (native or docker) and fail loudly if it
+# is not the pinned build.
+if [[ "${USE_DOCKER_BB}" == "1" ]]; then
+  BB_VERSION_RAW="$(docker run --rm "${BB_DOCKER_IMAGE}" bb --version 2>/dev/null | head -n1)"
+else
+  BB_VERSION_RAW="$("${BB_BIN}" --version 2>/dev/null | head -n1)"
+fi
+if [[ "${BB_VERSION_RAW}" != *"${REQUIRED_BB_VERSION}"* ]]; then
+  echo "[!] Expected bb ${REQUIRED_BB_VERSION}, but got '${BB_VERSION_RAW}'. Refusing to generate artifacts against an unpinned bb (would silently change the VK/proof)." >&2
+  exit 1
+fi
+echo "[i] bb version OK: ${BB_VERSION_RAW}"
+
 run_bb() {
   if [[ "${USE_DOCKER_BB}" == "1" ]]; then
     docker run --rm -v "${PROJECT_ROOT}:/work" -w /work "${BB_DOCKER_IMAGE}" bb "$@"
@@ -131,9 +156,9 @@ run_bb() {
 # itself as the keccak/no-ZK EVM target, mirroring plain `evm`'s
 # "(keccak, ZK)") is bb's *only* supported way to select keccak here; there
 # is no separate explicit flag to add. The real drift guard is the pinned
-# nargo/bb version above + REQUIRED_NARGO_VERSION check, which fails loudly
-# if bb's resolved version (and thus this target-to-oracle mapping) ever
-# moves.
+# nargo/bb versions above -- the REQUIRED_NARGO_VERSION *and*
+# REQUIRED_BB_VERSION checks -- which fail loudly if bb's resolved version
+# (and thus this target-to-oracle mapping) ever moves.
 echo "[3/5] bb write_vk --verifier_target evm-no-zk"
 rm -rf target/vk
 run_bb write_vk \
@@ -179,17 +204,20 @@ mkdir -p public/circuits
 CIRCUIT_SHA256="$(sha256sum "${ACIR}" | cut -d' ' -f1)"
 VK_SHA256="$(sha256sum target/vk | cut -d' ' -f1)"
 NARGO_VER="$("${NARGO_BIN}" --version 2>/dev/null | head -n1)"
-if [[ "${USE_DOCKER_BB}" == "1" ]]; then
-  BB_VER="$(docker run --rm "${BB_DOCKER_IMAGE}" bb --version 2>/dev/null | head -n1)"
-else
-  BB_VER="$("${BB_BIN}" --version 2>/dev/null | head -n1)"
-fi
+# BB_VERSION_RAW was captured + guarded against REQUIRED_BB_VERSION above.
+BB_VER="${BB_VERSION_RAW}"
 BUILT_AT="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
+# nargoRequired/bbRequired record the *pinned* versions this build enforces
+# (distinct from nargo/bb, which record the actually-resolved versions) so an
+# auditor can confirm the guarded pins straight from the manifest without
+# re-reading the script.
 cat > public/circuits/manifest.json <<EOF
 {
   "circuitSha256": "${CIRCUIT_SHA256}",
   "vkSha256": "${VK_SHA256}",
+  "nargoRequired": "${REQUIRED_NARGO_VERSION}",
+  "bbRequired": "${REQUIRED_BB_VERSION}",
   "nargo": "${NARGO_VER}",
   "bb": "${BB_VER}",
   "builtAt": "${BUILT_AT}"

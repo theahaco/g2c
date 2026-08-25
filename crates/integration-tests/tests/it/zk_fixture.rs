@@ -22,6 +22,7 @@ use sha2::{Digest, Sha256};
 use soroban_poseidon::{poseidon2_hash, Field as PoseidonField};
 use soroban_sdk::address_payload::AddressPayload;
 use soroban_sdk::crypto::BnScalar;
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::{Address, Bytes, BytesN, Env, Vec as SVec, U256};
 use std::fmt::Write as _;
 
@@ -547,12 +548,12 @@ fn fixture_addresses_pin() {
     let resolved_account = env.register_at(
         &account_pin,
         nido_integration_tests::WEBAUTHN_VERIFIER_WASM,
-        (),
+        (Address::generate(&env),),
     );
     let resolved_controller = env.register_at(
         &controller_pin,
         nido_integration_tests::WEBAUTHN_VERIFIER_WASM,
-        (),
+        (Address::generate(&env),),
     );
 
     assert_contract_id(&resolved_account, zk_fixture::ACCOUNT);
@@ -595,7 +596,10 @@ fn fixture_proof_verifies() {
     let proof_bytes = Bytes::from_slice(&env, &fixture.proof);
     let public_inputs = Bytes::from_slice(&env, &fixture.public_inputs);
 
-    let contract_id = env.register(zk_verifier_contract::WASM, (vk_bytes,));
+    let contract_id = env.register(
+        zk_verifier_contract::WASM,
+        (Address::generate(&env), vk_bytes),
+    );
     let client = zk_verifier_contract::Client::new(&env, &contract_id);
 
     let result = client.try_verify_proof(&public_inputs, &proof_bytes);
@@ -628,7 +632,10 @@ fn fixture_cancel_proof_verifies() {
     let proof_bytes = Bytes::from_slice(&env, &fixture.proof);
     let public_inputs = Bytes::from_slice(&env, &fixture.public_inputs);
 
-    let contract_id = env.register(zk_verifier_contract::WASM, (vk_bytes,));
+    let contract_id = env.register(
+        zk_verifier_contract::WASM,
+        (Address::generate(&env), vk_bytes),
+    );
     let client = zk_verifier_contract::Client::new(&env, &contract_id);
 
     let result = client.try_verify_proof(&public_inputs, &proof_bytes);
@@ -661,7 +668,10 @@ fn fixture_revoke_proof_verifies() {
     let proof_bytes = Bytes::from_slice(&env, &fixture.proof);
     let public_inputs = Bytes::from_slice(&env, &fixture.public_inputs);
 
-    let contract_id = env.register(zk_verifier_contract::WASM, (vk_bytes,));
+    let contract_id = env.register(
+        zk_verifier_contract::WASM,
+        (Address::generate(&env), vk_bytes),
+    );
     let client = zk_verifier_contract::Client::new(&env, &contract_id);
 
     let result = client.try_verify_proof(&public_inputs, &proof_bytes);

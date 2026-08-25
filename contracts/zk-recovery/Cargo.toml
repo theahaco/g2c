@@ -17,12 +17,15 @@ doctest = false
 soroban-sdk = { workspace = true, features = ["hazmat-address"] }
 # Poseidon2 host hashing. Pinned construction proven native to Noir's
 # `Poseidon2::hash` in M0 (crates/integration-tests/tests/it/zk_vectors.rs).
-# pinned rev — Poseidon2 parity is byte-critical vs the circuit
-soroban-poseidon = { git = "https://github.com/stellar/rs-soroban-poseidon", rev = "b4bf706b7d0d602f9389280d259c0fb9f19983bf" }
+# tag v27.0.0 — Poseidon2 parity is byte-critical vs the circuit; v27.0.0 is a
+# version-only bump over the prior v26.0.0 pin (Cargo.toml only, no algorithm change).
+soroban-poseidon = { git = "https://github.com/stellar/rs-soroban-poseidon", tag = "v27.0.0" }
 # Not used by this task's scaffold (hash.rs/types.rs only); added now
 # because the OZ `Policy`/`ContextRule`/`Signer` types this crate needs for
 # the M1 controller/policy modules (later tasks) live here.
 stellar-accounts = { workspace = true }
+# admin/set_admin/upgrade for the shared pool come from the SEP admin traits.
+admin-sep = { workspace = true }
 
 [dev-dependencies]
 soroban-sdk = { workspace = true, features = ["testutils", "hazmat-address"] }

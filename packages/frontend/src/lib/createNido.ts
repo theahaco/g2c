@@ -19,5 +19,11 @@ function setupHost(host: string): string {
 export function createNido(host: string): string {
   const salt = new Uint8Array(32);
   crypto.getRandomValues(salt);
-  return `//${setupHost(host)}/new-account/?salt=${buf2hex(salt)}&setup=1`;
+  // A2: the salt is a SETUP SECRET — it derives the deterministic account
+  // address and whoever holds it can claim the pre-funded account before the
+  // owner attaches a passkey. Carry it in the URL HASH, never the query: the
+  // fragment is never sent to the server, so it stays out of worker/CDN access
+  // logs and cross-origin Referer. `setup=1` is not secret and stays a query
+  // param (the receiver reads it before the salt is scrubbed).
+  return `//${setupHost(host)}/new-account/?setup=1#salt=${buf2hex(salt)}`;
 }

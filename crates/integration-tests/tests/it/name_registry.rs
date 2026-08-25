@@ -20,7 +20,7 @@ fn register_name_via_smart_account() {
 
     let (_sa_client, account_addr, _verifier_addr, _signing_key) = deploy_smart_account(&env);
 
-    let registry_addr = env.register(NAME_REGISTRY_WASM, ());
+    let registry_addr = env.register(NAME_REGISTRY_WASM, (Address::generate(&env),));
     let registry = NameRegistryClient::new(&env, &registry_addr);
 
     let name = String::from_str(&env, "alice");
@@ -34,7 +34,7 @@ fn register_name_via_smart_account() {
 fn resolve_unregistered_returns_none() {
     let env = Env::default();
 
-    let registry_addr = env.register(NAME_REGISTRY_WASM, ());
+    let registry_addr = env.register(NAME_REGISTRY_WASM, (Address::generate(&env),));
     let registry = NameRegistryClient::new(&env, &registry_addr);
 
     assert_eq!(registry.resolve(&String::from_str(&env, "nobody")), None);
@@ -47,7 +47,7 @@ fn release_name_via_smart_account() {
 
     let (_sa_client, account_addr, _verifier_addr, _signing_key) = deploy_smart_account(&env);
 
-    let registry_addr = env.register(NAME_REGISTRY_WASM, ());
+    let registry_addr = env.register(NAME_REGISTRY_WASM, (Address::generate(&env),));
     let registry = NameRegistryClient::new(&env, &registry_addr);
 
     let name = String::from_str(&env, "bob");

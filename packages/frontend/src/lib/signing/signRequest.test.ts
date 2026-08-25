@@ -155,4 +155,37 @@ describe("signRequestFromParams (legacy dApp entry)", () => {
   it("returns null for non-tx kinds (message/authEntry handled elsewhere)", () => {
     expect(signRequestFromParams(new URLSearchParams({ kind: "message", message: "hi", dapp: "https://x" }), C1)).toBeNull();
   });
+
+  // Source-side origin/return validation (defence in depth vs. the /sign/
+  // consumer's own check): the spoof-origin / exfiltrate-signature vector.
+  it("rejects a cross-origin return URL (spoof-origin, exfiltrate signature)", () => {
+    const p = new URLSearchParams({
+      kind: "tx", xdr: "AAAA==", dapp: "https://good.example",
+      return: "https://attacker.example/steal",
+    });
+    expect(signRequestFromParams(p, C1)).toBeNull();
+  });
+  it("rejects a non-http(s) dapp origin (javascript:)", () => {
+    expect(signRequestFromParams(
+      new URLSearchParams({ kind: "tx", xdr: "AAAA==", dapp: "javascript:alert(1)" }), C1,
+    )).toBeNull();
+  });
+  it("rejects a malformed / relative dapp origin", () => {
+    expect(signRequestFromParams(
+      new URLSearchParams({ kind: "tx", xdr: "AAAA==", dapp: "not-a-url" }), C1,
+    )).toBeNull();
+  });
+  it("allows a dApp request with no return URL (posts back to the dapp origin)", () => {
+    const p = new URLSearchParams({ kind: "tx", xdr: "AAAA==", dapp: "https://app.example/launch?x=1" });
+    const req = signRequestFromParams(p, C1);
+    expect(req?.returnTarget).toEqual({ type: "dapp", origin: "https://app.example", returnUrl: undefined });
+  });
+  it("normalises the dapp param to its bare origin for display", () => {
+    const p = new URLSearchParams({
+      kind: "tx", xdr: "AAAA==", dapp: "https://app.example/deep/path",
+      return: "https://app.example/cb",
+    });
+    const req = signRequestFromParams(p, C1);
+    expect((req?.returnTarget as { origin: string }).origin).toBe("https://app.example");
+  });
 });

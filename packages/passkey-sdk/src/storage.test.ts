@@ -27,21 +27,33 @@ describe('policy storage', () => {
     expect(loadFriendNicknames(ACC)).toEqual({ [addr]: "Alice's iPhone" });
   });
 
-  it('round-trips session-key material', () => {
+  it('round-trips session-key material (no private key persisted)', () => {
     const target = 'C' + 'C'.repeat(55);
     saveSessionKeyMaterial(ACC, target, {
-      privateKey: new Uint8Array([1, 2, 3]),
       credentialId: 'cred-1',
+      publicKey: '04ab',
       label: 'status-message',
     });
+    // Nothing under the session key on disk carries a private key.
+    expect(localStorage.getItem(`nido.${ACC}.session-key.${target}`)).not.toContain('privateKey');
     const got = loadSessionKeyMaterial(ACC, target);
-    expect(got).toEqual({
-      privateKey: new Uint8Array([1, 2, 3]),
-      credentialId: 'cred-1',
-      label: 'status-message',
-    });
+    expect(got).toEqual({ credentialId: 'cred-1', publicKey: '04ab', label: 'status-message' });
     forgetSessionKeyMaterial(ACC, target);
     expect(loadSessionKeyMaterial(ACC, target)).toBeNull();
+  });
+
+  it('purges a deprecated synthetic privateKey from a stale session entry on load', () => {
+    const target = 'C' + 'D'.repeat(55);
+    const key = `nido.${ACC}.session-key.${target}`;
+    // A pre-existing entry from the old synthetic flow, with a plaintext key.
+    localStorage.setItem(key, JSON.stringify({
+      credentialId: 'cred-2', publicKey: '04cd', label: 'legacy', privateKey: [1, 2, 3],
+    }));
+    const got = loadSessionKeyMaterial(ACC, target);
+    // The load never hands back the private key...
+    expect(got).toEqual({ credentialId: 'cred-2', publicKey: '04cd', label: 'legacy' });
+    // ...and scrubs it from storage so it can't be read again.
+    expect(localStorage.getItem(key)).not.toContain('privateKey');
   });
 
   it('round-trips block labels', () => {

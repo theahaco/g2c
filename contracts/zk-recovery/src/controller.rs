@@ -655,6 +655,7 @@ mod has_pending_tests {
                 24 * 3600_u64,
                 Bytes::from_slice(env, b"Test SDF Network ; September 2015"),
                 webauthn_verifier,
+                Address::generate(env), // upgrade admin (unused by this file's coverage)
             ),
         )
     }

@@ -1,0 +1,15 @@
+# Cloudflare Pages security headers for the STATIC origin (direct *.pages.dev
+# and PR previews that bypass the worker proxy). Copied verbatim into the build
+# output. The wildcard *.nido.fyi production traffic goes through
+# frontend/worker-proxy-nido/index.js, which sets the SAME headers; keep the two
+# in sync. Enforced: frame/content-type/referrer. CSP is Report-Only (never
+# blocks) until the report stream is verified clean in prod, then promote to
+# Content-Security-Policy (drop -Report-Only) in BOTH places. See docs/MAINNET_READINESS.md.
+# MAINNET CUTOVER: the connect-src Stellar hosts below are TESTNET
+# (soroban-testnet/horizon-testnet/friendbot) — swap to soroban.stellar.org +
+# horizon.stellar.org and remove friendbot at cutover, in BOTH places.
+/*
+  X-Frame-Options: DENY
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: no-referrer
+  Content-Security-Policy-Report-Only: default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.nido.fyi https://nido.fly.dev https://soroban-testnet.stellar.org https://horizon-testnet.stellar.org https://friendbot.stellar.org https://api.refractor.space https://api.soroswap.finance; object-src 'none'; base-uri 'self'; frame-ancestors 'none'; form-action 'self'

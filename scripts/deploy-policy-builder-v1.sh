@@ -42,27 +42,23 @@
 #                        registry (requires curation rights).
 #   SKIP_BUILD           If set, skip `just build-contracts`.
 #
-# Re-deploying a non-upgradable contract (factory / multisig-policy /
-# verifier in their current form):
+# Upgradability (issue #26): the factory, multisig-policy AND webauthn
+# verifier now each carry an admin-gated upgrade() (admin set via
+# __constructor(admin: Address) at deploy time). So this script passes
+# `-- --admin <ADMIN_ADDR>` on every FRESH deploy below. ADMIN_ADDR
+# defaults to the deploying alias's public key; override it with a
+# multisig on mainnet (ideally behind an upgrade timelock).
 #
-# None of the policy-builder-v1 contracts have admin()/upgrade(); to
-# ship a new WASM you must deploy a fresh contract at a new address and
-# repoint the registry name. Pattern (verified, used on testnet):
-#
-#   stellar contract deploy --wasm target/.../<name>.wasm \
-#     --source-account <alias> --network <net>
-#   # captures the new C-address
-#
-#   stellar contract invoke --id <REGISTRY> --source-account <alias> \
-#     --network <net> -- update_contract_address \
-#     --contract_name <name>             # bare, no prefix \
-#     --new_address <new C-address>
+# IMPORTANT: a constructor only runs at DEPLOY time, so an in-place
+# `stellar registry upgrade` of a PRE-admin contract can never populate
+# the admin slot — admin()/upgrade() would keep trapping. Migrating a
+# pre-admin deployment therefore still means: deploy a FRESH contract
+# (passing --admin) at a new address and repoint its registry name to it
+# (the factory section below does exactly this). Once a contract carries
+# an admin, subsequent code changes CAN use its own upgrade() in place.
 #
 # REGISTRY for testnet is CDBL7MNO7UI5OAAIC67UIWKQ4P3S6RVQSFCQXUHUW6TOFCXSYRPNHY4S
-# (the unverified registry). The CLI's "registry deploy/upgrade" flow
-# assumes a contract that can self-upgrade or be re-registered; the
-# above manual pattern works when neither holds. See #25 / #26 for the
-# long-term factory rewrite.
+# (the unverified registry). See #25 / #26.
 
 set -euo pipefail
 
@@ -169,6 +165,16 @@ ok "Network (STELLAR_NETWORK): $NETWORK"
 ok "Registry prefix: '${REGISTRY_PREFIX}' (override via REGISTRY_PREFIX env)"
 ok "Factory contract: $FACTORY_CONTRACT_ID"
 
+# The upgrade admin for every FRESH contract this script deploys
+# (multisig-policy, verifier, factory) — all now carry an admin-gated
+# upgrade() (issue #26). Resolved from the deploying alias so each
+# __constructor(admin: Address) gets a concrete G-address. Override with
+# ADMIN_ADDR to point at a multisig on mainnet (strongly recommended;
+# ideally behind an upgrade timelock).
+ADMIN_ADDR="${ADMIN_ADDR:-$(stellar keys address "$ALIAS")}"
+[ -n "$ADMIN_ADDR" ] || die "could not resolve an admin address (stellar keys address '$ALIAS'; or set ADMIN_ADDR)"
+ok "Upgrade admin for fresh deploys: $ADMIN_ADDR"
+
 if [ -z "${SKIP_BUILD:-}" ]; then
     note "Building contracts (set SKIP_BUILD=1 to skip)"
     just build-contracts >/dev/null
@@ -202,13 +208,16 @@ policy_addr="$(fetch_contract_id "$POLICY_NAME")"
 if [ -n "$policy_addr" ]; then
     skip "$POLICY_NAME already deployed: $policy_addr"
 else
+    # multisig-policy now has an admin-gated upgrade() — pass its
+    # __constructor(admin) arg via the `--` ctor-arg passthrough.
     stellar registry deploy \
         --contract-name "$POLICY_NAME" \
         --wasm-name "$POLICY_NAME" \
         --version "$POLICY_VERSION" \
-        --source-account "$ALIAS"
+        --source-account "$ALIAS" \
+        -- --admin "$ADMIN_ADDR"
     policy_addr="$(fetch_contract_id "$POLICY_NAME")"
-    ok "deployed $POLICY_NAME: $policy_addr"
+    ok "deployed $POLICY_NAME: $policy_addr (admin $ADMIN_ADDR)"
 fi
 
 # --- Verifier (publish + deploy if missing) -----------------------------
@@ -238,13 +247,16 @@ else
         skip "$VERIFIER_NAME@$VERIFIER_VERSION already published"
     fi
 
+    # The verifier now has an admin-gated upgrade() — pass its
+    # __constructor(admin) arg via the `--` ctor-arg passthrough.
     stellar registry deploy \
         --contract-name "$VERIFIER_NAME" \
         --wasm-name "$VERIFIER_NAME" \
         --version "$VERIFIER_VERSION" \
-        --source-account "$ALIAS"
+        --source-account "$ALIAS" \
+        -- --admin "$ADMIN_ADDR"
     verifier_addr="$(fetch_contract_id "$VERIFIER_NAME")"
-    ok "deployed $VERIFIER_NAME: $verifier_addr"
+    ok "deployed $VERIFIER_NAME: $verifier_addr (admin $ADMIN_ADDR)"
 fi
 
 # --- smart-account (publish so the factory's deploy hash is resolvable) ---
@@ -316,10 +328,8 @@ else
     ok "published $FACTORY_NAME@$FACTORY_VERSION"
 fi
 
-# The admin the fresh factory is constructed with = the deploying alias's
-# public key (resolved from the alias so the constructor gets a G-address).
-ADMIN_ADDR="$(stellar keys address "$ALIAS")"
-[ -n "$ADMIN_ADDR" ] || die "could not resolve public key for alias '$ALIAS' (stellar keys address)"
+# The fresh factory is constructed with the same $ADMIN_ADDR resolved in
+# preflight (the deploying alias's key by default, or the ADMIN_ADDR override).
 ok "factory admin will be: $ADMIN_ADDR"
 
 # Idempotency guard: if `factory` already resolves to an admin-capable

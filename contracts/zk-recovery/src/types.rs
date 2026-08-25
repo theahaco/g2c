@@ -103,6 +103,12 @@ pub enum RecoveryKey {
     // ledger timestamp of an account's most recent successful cancel, for
     // the 24h cooldown check (spec §2.4).
     LastCancel(Address),
+    // Upgradability (issue #26). RETAINED FOR XDR-ORDINAL STABILITY ONLY: the
+    // admin/upgrade governance key is now owned by the `admin-sep` crate, which
+    // stores the admin under its own `ADMIN` symbol key -- this variant is no
+    // longer read or written. Kept (not deleted) so every later variant keeps
+    // its XDR ordinal.
+    Admin,
 }
 
 /// Contract error codes (spec §3.3 interface/checks, §3.1 completion
@@ -152,6 +158,12 @@ pub enum RecoveryError {
     // comment). Kept, unused, so this variant's explicit discriminant is
     // never renumbered/reassigned.
     NullifierReservedElsewhere = 22,
+
+    // pool.rs upgradability (issue #26). RETAINED FOR ERROR-CODE STABILITY
+    // ONLY: admin/upgrade now come from `admin-sep`, which reads the admin
+    // infallibly, so no code path returns this anymore. Kept (not deleted) so
+    // the explicit discriminant is never renumbered/reassigned.
+    AdminNotSet = 23,
 }
 
 /// `insert`/`insert_for` (pool.rs, later task): a new leaf entered the tree.

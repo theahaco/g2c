@@ -28,8 +28,9 @@ base64 = { workspace = true }
 
 [dev-dependencies]
 # ZK: cross-language Poseidon2 hash parity (host vs Noir)
-# pinned rev — Poseidon2 parity is byte-critical vs the circuit
-soroban-poseidon = { git = "https://github.com/stellar/rs-soroban-poseidon", rev = "b4bf706b7d0d602f9389280d259c0fb9f19983bf" }
+# tag v27.0.0 — Poseidon2 parity is byte-critical vs the circuit; v27.0.0 is a
+# version-only bump over the prior v26.0.0 pin (Cargo.toml only, no algorithm change).
+soroban-poseidon = { git = "https://github.com/stellar/rs-soroban-poseidon", tag = "v27.0.0" }
 serde_json = "1"
 # M1 Task 5's zk_recovery_lifecycle test exercises the real
 # `ZkRecovery::initiate_recovery` contract entry point end-to-end.

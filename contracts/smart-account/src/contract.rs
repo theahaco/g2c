@@ -6,7 +6,7 @@ use soroban_sdk::{
     auth::{Context, CustomAccountInterface},
     contract, contractclient, contracterror, contractimpl, contracttype,
     crypto::Hash,
-    panic_with_error, symbol_short, Address, Env, IntoVal, Map, String, Symbol, Val, Vec,
+    panic_with_error, symbol_short, Address, BytesN, Env, IntoVal, Map, String, Symbol, Val, Vec,
 };
 use stellar_accounts::policies::simple_threshold::SimpleThresholdAccountParams;
 use stellar_accounts::smart_account::{
@@ -61,6 +61,21 @@ pub enum NidoSmartAccountError {
     /// rule first via `initiate_recovery_rule_removal`/
     /// `execute_recovery_rule_removal`, then enroll again.
     RecoveryAlreadyEnrolled = 6,
+    /// `upgrade` (the immediate path) was called on an account that HAS a
+    /// recovery rule installed. Such accounts must upgrade via the
+    /// announce-then-execute path (`initiate_upgrade` -> 7-day delay ->
+    /// `execute_upgrade`), for the same reason `remove_context_rule` on the
+    /// recovery rule is `RecoveryRuleProtected`: otherwise `upgrade` would be a
+    /// zero-delay escape hatch letting a stolen passkey swap in a wasm with no
+    /// recovery rule and permanently lock out the owner, bypassing both the
+    /// 7-day removal timelock and the unconditional rule-protection checks.
+    /// Accounts with NO recovery rule keep the immediate `upgrade` path.
+    UpgradeRequiresTimelock = 7,
+    /// `execute_upgrade` was called without a prior `initiate_upgrade` (or it
+    /// was already consumed by a successful execute).
+    UpgradeNotAnnounced = 8,
+    /// `execute_upgrade` was called before the announced 7-day delay elapsed.
+    UpgradeDelayNotElapsed = 9,
 }
 
 /// Minimal cross-call stub for `nido-zk-recovery`'s `has_pending` view.
@@ -83,7 +98,18 @@ trait RecoveryController {
 }
 
 /// Cross-calls `controller`'s `has_pending` view for this account. Pure
-/// passthrough -- callers decide what to do with the result.
+/// passthrough of the boolean -- callers decide what to do with `true`/`false`.
+///
+/// FAIL-SECURE (invariant S2): this uses the NON-`try_` client, so it only ever
+/// returns on a clean `bool`. If the controller cross-call itself fails -- the
+/// controller address is wrong/uninstalled, the contract traps, or `has_pending`
+/// errors -- the call does NOT return `false`; it TRAPS, unwinding the entire
+/// enclosing mutation (`remove_signer`/`remove_context_rule`/`remove_policy`/
+/// `update_context_rule_valid_until`, or `execute_recovery_rule_removal`) and
+/// reverting the transaction atomically. So an unreachable or misbehaving
+/// controller BLOCKS eviction rather than silently permitting it -- the guard
+/// fails closed. (A `try_`-based variant that mapped errors to `false` would be
+/// the opposite: it would let a controller outage disable the recovery guard.)
 fn has_live_pending(e: &Env, controller: &Address) -> bool {
     RecoveryControllerClient::new(e, controller).has_pending(&e.current_contract_address())
 }
@@ -136,6 +162,17 @@ const RECOVERY_CONTROLLER: Symbol = symbol_short!("RCVR_CTRL");
 /// `execute_recovery_rule_removal` (which clears it) or a fresh
 /// `initiate_recovery_rule_removal` call (which overwrites it).
 const RECOVERY_REMOVAL_AT: Symbol = symbol_short!("RCVR_RM");
+
+/// Instance storage key for the wasm hash announced by `initiate_upgrade`,
+/// pending its 7-day delay. Present only between a successful `initiate_upgrade`
+/// and a successful `execute_upgrade` (which clears it) or a fresh
+/// `initiate_upgrade` (which overwrites it). Recovery-enabled accounts only --
+/// accounts with no recovery rule upgrade immediately via `upgrade`.
+const PENDING_UPGRADE_HASH: Symbol = symbol_short!("UPG_HASH");
+
+/// Instance storage key for the announced execute-after timestamp set by
+/// `initiate_upgrade`; mirrors `RECOVERY_REMOVAL_AT`.
+const PENDING_UPGRADE_AT: Symbol = symbol_short!("UPG_AT");
 
 /// Announce-then-execute delay (spec §3.2) for
 /// `initiate_recovery_rule_removal` -> `execute_recovery_rule_removal`: 7
@@ -443,6 +480,101 @@ impl NidoSmartAccount {
             &friends,
             &policies,
         )
+    }
+
+    /// Upgrade this account's own wasm to `new_wasm_hash` (an
+    /// already-installed wasm hash). Governed by the account's OWN auth --
+    /// the same `current_contract_address().require_auth()` gate as every
+    /// other account mutation, so it is subject to the account's signing
+    /// policy exactly like `add_signer`/`remove_signer`/etc. (no separate
+    /// admin key: the account IS its own admin).
+    ///
+    /// TWO guards, both defending the recovery mechanism against a stolen
+    /// passkey:
+    ///  - `guard_no_pending`: an upgrade is BLOCKED while a recovery is
+    ///    pending.
+    ///  - If a recovery rule is installed, the IMMEDIATE path is REFUSED
+    ///    (`UpgradeRequiresTimelock`). Otherwise `upgrade` would be a
+    ///    zero-delay escape hatch around the protected recovery rule: a thief
+    ///    could `upgrade` to a wasm that omits the rule and permanently lock
+    ///    out the owner, bypassing the 7-day `initiate/execute_recovery_rule_removal`
+    ///    timelock and the unconditional `RecoveryRuleProtected` checks
+    ///    (`remove_signer`/`remove_context_rule`/`remove_policy`/
+    ///    `update_context_rule_valid_until` are all guarded for the same
+    ///    reason). Recovery-enabled accounts must instead go
+    ///    `initiate_upgrade` -> 7-day delay -> `execute_upgrade`. Accounts with
+    ///    NO recovery rule are unaffected and upgrade immediately here.
+    // `#[contractimpl]` entry point; SDK ABI requires an owned `BytesN`.
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
+        e.current_contract_address().require_auth();
+        guard_no_pending(e);
+        if NidoSmartAccount::recovery_rule_id(e).is_some() {
+            panic_with_error!(e, NidoSmartAccountError::UpgradeRequiresTimelock);
+        }
+        e.deployer().update_current_contract_wasm(new_wasm_hash);
+    }
+
+    /// Step 1 of upgrading a RECOVERY-ENABLED account: announces the target
+    /// wasm hash and starts the same 7-day timer (`RECOVERY_REMOVAL_DELAY_SECS`)
+    /// that recovery-rule removal uses. Mirrors `initiate_recovery_rule_removal`:
+    /// a thief holding a stolen passkey COULD announce a malicious upgrade, but
+    /// the delay is the defense -- it gives the legitimate owner (or a monitor)
+    /// a real window to react, e.g. by initiating a genuine recovery, which then
+    /// blocks `execute_upgrade` via the same live-pending guard, or by
+    /// overwriting the announcement.
+    ///
+    /// Requires this account's own auth. Panics `NoRecoveryConfigured` if the
+    /// account has no recovery rule (use the immediate `upgrade` instead), and
+    /// `RecoveryPendingBlocked` if a recovery is currently pending.
+    // `#[contractimpl]` entry point; SDK ABI requires an owned `BytesN`.
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn initiate_upgrade(e: &Env, new_wasm_hash: BytesN<32>) {
+        e.current_contract_address().require_auth();
+        let controller = recovery_controller_or_panic(e);
+        guard_live_pending(e, &controller);
+        let at = e.ledger().timestamp() + RECOVERY_REMOVAL_DELAY_SECS;
+        e.storage()
+            .instance()
+            .set(&PENDING_UPGRADE_HASH, &new_wasm_hash);
+        e.storage().instance().set(&PENDING_UPGRADE_AT, &at);
+    }
+
+    /// Step 2: performs the announced upgrade once the 7-day delay has elapsed.
+    /// Requires this account's own auth again. Panics `UpgradeNotAnnounced` if
+    /// `initiate_upgrade` was never called (or was already consumed),
+    /// `UpgradeDelayNotElapsed` before the announced timestamp, and
+    /// `RecoveryPendingBlocked` if a recovery became pending during the delay
+    /// window (re-checked here, not just at announce time -- so an owner's
+    /// genuine in-flight recovery blocks a thief's announced upgrade). Mirrors
+    /// `execute_recovery_rule_removal`.
+    pub fn execute_upgrade(e: &Env) {
+        e.current_contract_address().require_auth();
+
+        let announced_at: u64 = e
+            .storage()
+            .instance()
+            .get(&PENDING_UPGRADE_AT)
+            .unwrap_or_else(|| panic_with_error!(e, NidoSmartAccountError::UpgradeNotAnnounced));
+        if e.ledger().timestamp() < announced_at {
+            panic_with_error!(e, NidoSmartAccountError::UpgradeDelayNotElapsed);
+        }
+
+        // Re-check live-pending at execute time (mirrors
+        // execute_recovery_rule_removal): a genuine recovery initiated during
+        // the delay window blocks the announced upgrade.
+        let controller = recovery_controller_or_panic(e);
+        guard_live_pending(e, &controller);
+
+        let new_wasm_hash: BytesN<32> = e
+            .storage()
+            .instance()
+            .get(&PENDING_UPGRADE_HASH)
+            .unwrap_or_else(|| panic_with_error!(e, NidoSmartAccountError::UpgradeNotAnnounced));
+
+        e.storage().instance().remove(&PENDING_UPGRADE_HASH);
+        e.storage().instance().remove(&PENDING_UPGRADE_AT);
+        e.deployer().update_current_contract_wasm(new_wasm_hash);
     }
 }
 
@@ -840,6 +972,117 @@ mod test {
         );
         assert_account_error(
             client.try_remove_context_rule(&extra_rule.id),
+            NidoSmartAccountError::RecoveryPendingBlocked,
+        );
+    }
+
+    /// The guard also blocks `upgrade` while a recovery is pending: without
+    /// it a thief who can authorize as the account could swap in a wasm that
+    /// ignores the recovery rule and disarm recovery mid-timelock, bypassing
+    /// the whole guard set. `guard_no_pending` fires BEFORE
+    /// `update_current_contract_wasm`, so the placeholder hash is never
+    /// reached (no real wasm needs to be installed for this test).
+    #[test]
+    fn guard_blocks_upgrade_while_pending() {
+        let e = Env::default();
+        e.mock_all_auths();
+        let setup = deploy_with_stub(&e);
+        let client = NidoSmartAccountClient::new(&e, &setup.account_addr);
+        let stub = StubRecoveryPolicyClient::new(&e, &setup.controller);
+
+        stub.set_pending(&setup.account_addr, &true);
+
+        let placeholder = soroban_sdk::BytesN::from_array(&e, &[0u8; 32]);
+        assert_account_error(
+            client.try_upgrade(&placeholder),
+            NidoSmartAccountError::RecoveryPendingBlocked,
+        );
+    }
+
+    /// The previously-unguarded case: even with NO recovery pending, the
+    /// immediate `upgrade` path is refused on a recovery-enabled account --
+    /// otherwise a stolen passkey could swap in a wasm with no recovery rule
+    /// and permanently disarm recovery with zero delay. Must go through the
+    /// announce-then-execute timelock instead.
+    #[test]
+    fn immediate_upgrade_refused_when_recovery_installed() {
+        let e = Env::default();
+        e.mock_all_auths();
+        let setup = deploy_with_stub(&e);
+        let client = NidoSmartAccountClient::new(&e, &setup.account_addr);
+        // has_pending defaults to false -- this is the steady state a thief
+        // exploits, and the case the old `guard_no_pending`-only check missed.
+        let placeholder = soroban_sdk::BytesN::from_array(&e, &[0u8; 32]);
+        assert_account_error(
+            client.try_upgrade(&placeholder),
+            NidoSmartAccountError::UpgradeRequiresTimelock,
+        );
+    }
+
+    /// `execute_upgrade` with nothing announced is rejected.
+    #[test]
+    fn execute_upgrade_without_announce_is_rejected() {
+        let e = Env::default();
+        e.mock_all_auths();
+        let setup = deploy_with_stub(&e);
+        let client = NidoSmartAccountClient::new(&e, &setup.account_addr);
+        assert_account_error(
+            client.try_execute_upgrade(),
+            NidoSmartAccountError::UpgradeNotAnnounced,
+        );
+    }
+
+    /// `execute_upgrade` before the announced 7-day delay elapses is rejected.
+    #[test]
+    fn execute_upgrade_before_delay_is_rejected() {
+        let e = Env::default();
+        e.mock_all_auths();
+        let setup = deploy_with_stub(&e);
+        let client = NidoSmartAccountClient::new(&e, &setup.account_addr);
+        let placeholder = soroban_sdk::BytesN::from_array(&e, &[0u8; 32]);
+        client.initiate_upgrade(&placeholder);
+        // Same ledger time -> now < announced_at (now + 7d).
+        assert_account_error(
+            client.try_execute_upgrade(),
+            NidoSmartAccountError::UpgradeDelayNotElapsed,
+        );
+    }
+
+    /// Announcing an upgrade is blocked while a recovery is already pending
+    /// (a thief can't race an in-flight recovery).
+    #[test]
+    fn initiate_upgrade_blocked_while_recovery_pending() {
+        let e = Env::default();
+        e.mock_all_auths();
+        let setup = deploy_with_stub(&e);
+        let client = NidoSmartAccountClient::new(&e, &setup.account_addr);
+        let stub = StubRecoveryPolicyClient::new(&e, &setup.controller);
+        stub.set_pending(&setup.account_addr, &true);
+        let placeholder = soroban_sdk::BytesN::from_array(&e, &[0u8; 32]);
+        assert_account_error(
+            client.try_initiate_upgrade(&placeholder),
+            NidoSmartAccountError::RecoveryPendingBlocked,
+        );
+    }
+
+    /// Even after the delay elapses, `execute_upgrade` is blocked if a genuine
+    /// recovery became pending during the window -- the owner's in-flight
+    /// recovery wins the race against a thief's announced upgrade.
+    #[test]
+    fn execute_upgrade_blocked_by_recovery_pending_after_delay() {
+        let e = Env::default();
+        e.mock_all_auths();
+        let setup = deploy_with_stub(&e);
+        let client = NidoSmartAccountClient::new(&e, &setup.account_addr);
+        let stub = StubRecoveryPolicyClient::new(&e, &setup.controller);
+        let placeholder = soroban_sdk::BytesN::from_array(&e, &[0u8; 32]);
+        client.initiate_upgrade(&placeholder);
+        let now = e.ledger().timestamp();
+        e.ledger()
+            .with_mut(|li| li.timestamp = now + RECOVERY_REMOVAL_DELAY_SECS + 1);
+        stub.set_pending(&setup.account_addr, &true);
+        assert_account_error(
+            client.try_execute_upgrade(),
             NidoSmartAccountError::RecoveryPendingBlocked,
         );
     }

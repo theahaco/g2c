@@ -18,6 +18,7 @@
 //! frontend finalize step; see `tests/e2e/testnet/account-lifecycle.testnet.spec.ts`.)
 
 use nido_integration_tests::{build_contract_assertion, compute_auth_digest, deploy_smart_account};
+use soroban_sdk::testutils::Address as _;
 use soroban_sdk::xdr::ToXdr as _;
 use soroban_sdk::xdr::{
     Hash, HashIdPreimage, HashIdPreimageSorobanAuthorization, InvokeContractArgs, Limits,
@@ -46,7 +47,7 @@ fn register_name_with_real_passkey_auth() {
     let env = Env::default();
     let (_sa_client, account_addr, verifier_addr, signing_key) = deploy_smart_account(&env);
 
-    let registry_addr = env.register(NAME_REGISTRY_WASM, ());
+    let registry_addr = env.register(NAME_REGISTRY_WASM, (soroban_sdk::Address::generate(&env),));
     let registry = NameRegistryClient::new(&env, &registry_addr);
 
     let name = String::from_str(&env, "alice");

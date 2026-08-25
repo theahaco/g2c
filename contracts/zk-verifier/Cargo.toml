@@ -14,6 +14,7 @@ doctest = false
 # vendored verifier lib needs a global allocator on wasm32v1-none, which
 # soroban-sdk only wires up when this feature is enabled.
 soroban-sdk = { workspace = true, features = ["alloc"] }
+admin-sep = { workspace = true }
 ultrahonk_soroban_verifier = { path = "../vendor/ultrahonk-soroban-verifier", default-features = false }
 
 [dev-dependencies]
