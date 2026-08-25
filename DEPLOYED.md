@@ -226,6 +226,47 @@ re-created against the new factory.
 | Verifier (old) | `CD6IG543VWP4RRNAKJTX25GJEQ3QAR5WPMP44MCENF433IPDFQTIJRTG` | Built before `batch_canonicalize_key` was required by OZ `Verifier`. |
 | Multisig policy (old) | `CCJVJVNUXLD6MZDLSQMRWYAV4EKHE7IPOM5UJEPZAQUCL4Q5JMZFEUQA` | Built against soroban-sdk 25 + OZ v0.6 `ContextRule` (6 fields). Traps with `Error(Object, UnexpectedSize)` when v0.7 callers pass it the 8-field rule. |
 
+## PreauthSweepPolicy
+
+```bash
+❯ just build-contracts
+
+❯ stellar contract deploy --wasm target/wasm32v1-none/contract/nido_preauth_sweep_policy.wasm \
+  --source-account eme --network testnet
+
+  Uploading contract WASM…
+  ℹ️ Simulating transaction…
+  ℹ️ Signing transaction: 4b9da8a61640e9ed33e266f52a662a5baff77052961c70343b0f37a4f0edb2f1
+  🌎 Sending transaction…
+  ✅ Transaction submitted successfully!
+  🔗 https://stellar.expert/explorer/testnet/tx/4b9da8a61640e9ed33e266f52a662a5baff77052961c70343b0f37a4f0edb2f1
+  ℹ️ Deploying contract using wasm hash 6ecda12873da0511519d02f472d557d46cc8c348b2071990bb92c20fe608a93a
+  ℹ️ Simulating transaction…
+  ℹ️ Signing transaction: 53458c57c26bd732b08e5e86c7f411c73bdef9eeb91bcbf7c16accaf8af98411
+  🌎 Sending transaction…
+  ✅ Transaction submitted successfully!
+  🔗 https://stellar.expert/explorer/testnet/tx/53458c57c26bd732b08e5e86c7f411c73bdef9eeb91bcbf7c16accaf8af98411
+  🔗 https://lab.stellar.org/r/testnet/contract/CAEGA6AKEQHP5M2IOVYX3RA5QU6CZERXPR2DITWZ2P6FIGKTYQCTFDYA
+  ✅ Deployed!
+  CAEGA6AKEQHP5M2IOVYX3RA5QU6CZERXPR2DITWZ2P6FIGKTYQCTFDYA
+
+# add alias
+❯ stellar contract alias add --id CAEGA6AKEQHP5M2IOVYX3RA5QU6CZERXPR2DITWZ2P6FIGKTYQCTFDYA sweep
+
+# add registry alias too
+❯ stellar contract alias add --id CDBL7MNO7UI5OAAIC67UIWKQ4P3S6RVQSFCQXUHUW6TOFCXSYRPNHY4S unver-registry
+
+❯ stellar contract invoke --id unver-registry --source eme --network testnet -- register_contract --contract_name preauth-sweep-policy --contract_address CAEGA6AKEQHP5M2IOVYX3RA5QU6CZERXPR2DITWZ2P6FIGKTYQCTFDYA --owner eme
+
+  ℹ️ Simulating transaction…
+  ℹ️ Signing transaction: 340e9bf2c9850a80d86e5d23817047cea127f5a38a3db01612d2e79b2bb51df6
+  🌎 Sending transaction…
+  ✅ Transaction submitted successfully!
+  🔗 https://stellar.expert/explorer/testnet/tx/340e9bf2c9850a80d86e5d23817047cea127f5a38a3db01612d2e79b2bb51df6
+  📅 CDBL7MNO7UI5OAAIC67UIWKQ4P3S6RVQSFCQXUHUW6TOFCXSYRPNHY4S - Success - Event: Register (register), contract_name: "preauth-sweep-policy", contract_id: "CAEGA6AKEQHP5M2IOVYX3RA5QU6CZERXPR2DITWZ2P6FIGKTYQCTFDYA", sac: false, wasm_hash: "6ecda12873da0511519d02f472d557d46cc8c348b2071990bb92c20fe608a93a"
+  null
+```
+
 ## Re-deploying
 
 None of the policy-builder-v1 contracts have `admin()/upgrade()`. To ship a
