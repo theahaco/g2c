@@ -6,6 +6,7 @@ mod initiate_cost;
 mod multisig_recovery;
 mod name_registry;
 mod name_registry_passkey_auth;
+mod perch_publish_policy;
 mod scoped_session_key;
 mod smart_account_auth;
 mod smart_account_setup;
