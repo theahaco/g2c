@@ -1,0 +1,162 @@
+---
+// Policy inspector + builder. Shows every context rule on the account (scope,
+// signers, attached policies, expiry) and lets the owner add a new rule. The
+// curated Security page stays the friendly front door for recovery/session
+// keys; this is the full, general view.
+import NidoLayout from '../../../layouts/NidoLayout.astro';
+import Toast from '../../../components/Toast.astro';
+import PasskeySheet from '../../../components/PasskeySheet.astro';
+import Icon from '../../../components/Icon.astro';
+---
+<NidoLayout title="Policy">
+  <div class="col-scroll scroll-hide screen-in">
+    <div class="topbar dash-hide-desktop">
+      <a href="/account/" class="btn ghost sm" style="width:40px;height:40px;padding:0;border-radius:12px;" aria-label="Back to your Nido">
+        <Icon name="back" size={18} />
+      </a>
+      <div class="disp" style="font-weight:800;font-size:21px;">Policy</div>
+    </div>
+
+    <div class="pad" style="padding-top:8px;">
+      <div class="dash-head"><h1 class="dash-head-title disp">Account policy</h1></div>
+      <p class="mut" style="font-size:13.5px;margin:0 0 4px;line-height:1.5;">
+        Every rule that decides who may do what on this account.
+      </p>
+
+      <div id="pol-account-missing" class="alert" role="note" hidden style="margin-top:12px;">
+        Open this page from one of your accounts to see its policy.
+      </div>
+
+      <section aria-labelledby="pol-current-h">
+        <span id="pol-current-h" class="section-label" style="display:block;margin:22px 0 10px;">Current rules</span>
+        <div id="pol-status-line" class="mut" style="font-size:12.5px;margin-bottom:8px;">Loading…</div>
+        <div id="pol-rules" class="pol-list"></div>
+      </section>
+
+      <section aria-labelledby="pol-add-h">
+        <span id="pol-add-h" class="section-label" style="display:block;margin:26px 0 10px;">Add a rule</span>
+        <div class="card" style="padding:18px;">
+          <p class="mut" style="font-size:13px;margin:0 0 14px;line-height:1.55;">
+            Grant a key permission to act on this account — optionally scoped to one
+            contract, capped by a spending limit, or time-boxed with an expiry.
+          </p>
+          <div id="pol-builder"></div>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <Toast />
+  <PasskeySheet />
+</NidoLayout>
+
+<style is:global>
+  .pol-list { display: grid; gap: 12px; }
+  .pol-card { display: grid; gap: 10px; }
+  .pol-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; }
+  .pol-name { font-size: 16px; font-weight: 800; margin: 2px 0 0; }
+  .pol-badges { display: flex; flex-wrap: wrap; gap: 6px; justify-content: flex-end; }
+  .pol-badge {
+    font-size: 11px; font-weight: 700; padding: 3px 8px; border-radius: 999px;
+    background: var(--soft, rgba(0,0,0,0.06)); color: var(--ink, inherit); white-space: nowrap;
+  }
+  .pol-badge.primary { background: rgba(64, 132, 88, 0.16); color: #2f6b45; }
+  .pol-badge.gated { background: rgba(180, 120, 20, 0.16); color: #8a5a10; }
+  .pol-badge.danger { background: rgba(190, 60, 60, 0.16); color: #a13030; }
+  .pol-perm { font-size: 13.5px; line-height: 1.5; margin: 0; }
+  .pol-grid { display: grid; gap: 10px; }
+  .pol-field { display: grid; gap: 4px; }
+  .pol-field-label {
+    font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+    color: var(--muted, #888);
+  }
+  .pol-field-val { font-size: 13px; display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+  .pol-mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; word-break: break-all; }
+  .pol-signers { list-style: none; margin: 0; padding: 0; display: grid; gap: 6px; }
+  .pol-signer { display: flex; align-items: center; gap: 8px; font-size: 13px; }
+  .pol-signer-ico { flex: 0 0 auto; }
+  .pol-signer-label { font-weight: 600; }
+  .pol-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+  .pol-chip {
+    font-size: 11.5px; padding: 3px 8px; border-radius: 8px;
+    background: var(--soft, rgba(0,0,0,0.06));
+  }
+  .pol-chip.known { background: rgba(64, 132, 88, 0.14); }
+  .pol-builder { display: grid; gap: 12px; }
+  .pol-input-label { display: grid; gap: 5px; font-size: 12.5px; font-weight: 600; }
+  .pol-fieldset { border: 1px solid var(--line, rgba(0,0,0,0.1)); border-radius: 12px; padding: 12px; display: grid; gap: 8px; }
+  .pol-radio, .pol-check { display: flex; align-items: center; gap: 8px; font-size: 13px; font-weight: 500; }
+  .pol-signer-row { display: flex; gap: 8px; margin-bottom: 8px; flex-wrap: wrap; }
+  .pol-signer-row .input { flex: 1 1 140px; }
+  .pol-limit { display: flex; gap: 8px; flex-wrap: wrap; }
+</style>
+
+<script>
+  import { rpc } from '@stellar/stellar-sdk';
+  import { contractIdFromHostname, isContractId } from '@nidohq/passkey-sdk';
+  import { RPC_URL } from '../../../lib/network.js';
+  import { fetchAllChainRules, fetchRegistryAddress } from '../../../lib/policyChainFetch.js';
+  import { renderPolicyList } from '../../../components/PolicyInspector.js';
+  import { mountPolicyBuilder } from '../../../components/PolicyBuilder.js';
+
+  const account = contractIdFromHostname(window.location.hostname);
+  const rulesEl = document.getElementById('pol-rules')!;
+  const statusEl = document.getElementById('pol-status-line')!;
+
+  // Resolve which of the known registry policies map to which address, so
+  // attached policy contracts render with a name instead of a bare C-address.
+  async function loadKnownPolicies(): Promise<Map<string, string>> {
+    const wanted: Array<[string, string]> = [
+      ['spending-limit-policy', 'Spending limit'],
+      ['multisig-policy', 'Multisig threshold'],
+      ['zk-recovery', 'ZK recovery'],
+    ];
+    const known = new Map<string, string>();
+    await Promise.all(
+      wanted.map(async ([name, label]) => {
+        try {
+          known.set(await fetchRegistryAddress(name), label);
+        } catch {
+          // Registry entry absent on this network — leave it unlabeled.
+        }
+      }),
+    );
+    return known;
+  }
+
+  async function currentLedger(): Promise<number | null> {
+    try {
+      const server = new rpc.Server(RPC_URL);
+      return (await server.getLatestLedger()).sequence;
+    } catch {
+      return null;
+    }
+  }
+
+  async function refresh(known: Map<string, string>): Promise<void> {
+    statusEl.textContent = 'Loading rules…';
+    try {
+      const [rules, ledger] = await Promise.all([fetchAllChainRules(account!), currentLedger()]);
+      renderPolicyList(rulesEl, rules, { known, currentLedger: ledger });
+      statusEl.textContent = `${rules.length} rule${rules.length === 1 ? '' : 's'} installed.`;
+    } catch (err) {
+      statusEl.textContent = `Couldn't load: ${err instanceof Error ? err.message : String(err)}`;
+    }
+  }
+
+  async function init(): Promise<void> {
+    if (!account || !isContractId(account)) {
+      document.getElementById('pol-account-missing')!.hidden = false;
+      statusEl.textContent = '';
+      return;
+    }
+    const known = await loadKnownPolicies();
+    await refresh(known);
+    mountPolicyBuilder(document.getElementById('pol-builder')!, {
+      account,
+      onSubmitted: () => void refresh(known),
+    });
+  }
+
+  void init();
+</script>
