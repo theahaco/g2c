@@ -20,7 +20,7 @@ soroban-sdk = { workspace = true, features = ["testutils", "hazmat-address"] }
 stellar-accounts = { workspace = true }
 
 # Crypto
-p256 = { version = "0.13", features = ["ecdsa"] }
+p256 = { version = "0.14", features = ["ecdsa"] }
 sha2 = "0.10"
 
 # Encoding
