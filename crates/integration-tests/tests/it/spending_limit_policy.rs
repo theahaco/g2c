@@ -6,21 +6,21 @@
 //! window frees up budget once old entries age out.
 
 use nido_integration_tests::{
-    build_contract_assertion, compute_auth_digest, deploy_smart_account,
-    deploy_spending_limit_policy, spending_limit_install_map, test_key, SmartAccountClient,
+    deploy_smart_account, deploy_spending_limit_policy, one_sig, session_signer,
+    spending_limit_install_map, SmartAccountClient,
 };
 use p256::ecdsa::SigningKey;
 use soroban_sdk::auth::{Context, ContractContext};
 use soroban_sdk::testutils::{Address as _, Ledger as _};
-use soroban_sdk::xdr::ToXdr;
-use soroban_sdk::{symbol_short, vec, Address, Bytes, Env, IntoVal, Map, String};
+use soroban_sdk::{symbol_short, vec, Address, Bytes, Env, IntoVal, String};
 use stellar_accounts::policies::spending_limit::SpendingLimitError;
-use stellar_accounts::smart_account::{
-    do_check_auth, AuthPayload, ContextRule, ContextRuleType, Signer,
-};
-use stellar_accounts::verifiers::webauthn::WebAuthnSigData;
+use stellar_accounts::smart_account::{do_check_auth, ContextRule, ContextRuleType, Signer};
 
 const XLM: i128 = 10_000_000; // stroops
+
+/// This rule's id: `deploy_smart_account` creates the passkey Default rule at id
+/// 0, so the session-key rule installed second lands at id 1.
+const SESSION_RULE_ID: u32 = 1;
 
 #[allow(dead_code)]
 #[soroban_sdk::contractclient(name = "SpendingLimitPolicyClient")]
@@ -31,39 +31,6 @@ trait SpendingLimitPolicyInterface {
         context_rule: ContextRule,
         smart_account: Address,
     );
-}
-
-fn session_signer(env: &Env, verifier: &Address) -> (SigningKey, Signer) {
-    let key = test_key(2);
-    let pubkey = key.verifying_key().to_sec1_bytes();
-    (
-        key,
-        Signer::External(verifier.clone(), Bytes::from_slice(env, &pubkey)),
-    )
-}
-
-/// Sign the auth digest (sha256(payload || `context_rule_ids.to_xdr()`)) with the
-/// session key. All tests use rule id 1 (default=0, session-key=1).
-fn one_sig(
-    env: &Env,
-    signer: &Signer,
-    key: &SigningKey,
-    payload: &soroban_sdk::crypto::Hash<32>,
-) -> AuthPayload {
-    let context_rule_ids = vec![env, 1u32];
-    let auth_digest = compute_auth_digest(env, payload, &context_rule_ids);
-    let a = build_contract_assertion(key, env, &auth_digest);
-    let sd = WebAuthnSigData {
-        signature: a.signature,
-        authenticator_data: a.authenticator_data,
-        client_data: a.client_data,
-    };
-    let mut m: Map<Signer, Bytes> = Map::new(env);
-    m.set(signer.clone(), sd.to_xdr(env));
-    AuthPayload {
-        signers: m,
-        context_rule_ids,
-    }
 }
 
 /// The auth context the host produces when the smart account authorizes
@@ -112,7 +79,7 @@ fn setup(
     let admin = Address::generate(env);
     let sac = env.register_stellar_asset_contract_v2(admin).address();
     let policy_addr = deploy_spending_limit_policy(env);
-    let (key, signer) = session_signer(env, &verifier_addr);
+    let (key, signer) = session_signer(env, &verifier_addr, 2);
 
     client.add_context_rule(
         &ContextRuleType::CallContract(sac.clone()),
@@ -149,7 +116,7 @@ fn within_limit_transfer_authorizes() {
     let to = Address::generate(&env);
 
     let hash = env.crypto().sha256(&Bytes::from_array(&env, &[0x51; 32]));
-    let signatures = one_sig(&env, &signer, &key, &hash);
+    let signatures = one_sig(&env, &signer, &key, &hash, SESSION_RULE_ID);
     env.as_contract(&account_addr, || {
         do_check_auth(
             &env,
@@ -168,7 +135,7 @@ fn over_limit_rejected() {
     let to = Address::generate(&env);
 
     let hash = env.crypto().sha256(&Bytes::from_array(&env, &[0x52; 32]));
-    let signatures = one_sig(&env, &signer, &key, &hash);
+    let signatures = one_sig(&env, &signer, &key, &hash, SESSION_RULE_ID);
 
     // 4 XLM is within the 5 XLM limit.
     env.as_contract(&account_addr, || {
@@ -210,7 +177,7 @@ fn window_roll_allows_again() {
     let to = Address::generate(&env);
 
     let hash = env.crypto().sha256(&Bytes::from_array(&env, &[0x53; 32]));
-    let signatures = one_sig(&env, &signer, &key, &hash);
+    let signatures = one_sig(&env, &signer, &key, &hash, SESSION_RULE_ID);
 
     // Exhaust the whole limit at ledger 1000.
     env.as_contract(&account_addr, || {
@@ -252,7 +219,7 @@ fn raised_limit_mid_window_keeps_spent_total() {
     let to = Address::generate(&env);
 
     let hash = env.crypto().sha256(&Bytes::from_array(&env, &[0x54; 32]));
-    let signatures = one_sig(&env, &signer, &key, &hash);
+    let signatures = one_sig(&env, &signer, &key, &hash, SESSION_RULE_ID);
 
     // Spend 4 of the 5 XLM limit.
     env.as_contract(&account_addr, || {

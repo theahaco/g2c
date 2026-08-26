@@ -1,0 +1,22 @@
+[package]
+name = "nido-preauth-sweep-policy"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+publish = false
+
+[lib]
+# `rlib` in addition to `cdylib` (the sibling policies are cdylib-only) so the
+# integration-tests crate can import `PreauthSweepParams`/`SweepError` to build
+# install maps and assert exact error codes — the same pattern the workspace
+# already uses for `nido-zk-recovery` / `nido-smart-account` dev-deps. Adding
+# `rlib` is deps-neutral; the shipped wasm still comes from the `cdylib`.
+crate-type = ["cdylib", "rlib"]
+doctest = false
+
+[dependencies]
+soroban-sdk = { workspace = true }
+stellar-accounts = { workspace = true }
+
+[dev-dependencies]
+soroban-sdk = { workspace = true, features = ["testutils"] }

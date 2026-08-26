@@ -41,3 +41,9 @@ nido-zk-recovery = { path = "../../contracts/zk-recovery" }
 # wasm-export collision; the account under test is still deployed from
 # `SMART_ACCOUNT_WASM` bytes, not this Rust type).
 nido-smart-account = { path = "../../contracts/smart-account" }
+# The preauth-sweep-policy scoping tests import `PreauthSweepParams` (to build
+# the install map) and `SweepError` (to assert exact rejection codes). Imported
+# as an `rlib` dev-dep — same pattern as the two crates above; this crate is not
+# a `#[contract]`/cdylib so there is no wasm-export collision, and the policy
+# under test is still deployed from `PREAUTH_SWEEP_POLICY_WASM` bytes.
+nido-preauth-sweep-policy = { path = "../../contracts/preauth-sweep-policy" }

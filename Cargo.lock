@@ -1113,6 +1113,7 @@ name = "nido-integration-tests"
 version = "0.1.0"
 dependencies = [
  "base64",
+ "nido-preauth-sweep-policy",
  "nido-smart-account",
  "nido-zk-recovery",
  "p256",
@@ -1139,6 +1140,14 @@ dependencies = [
  "admin-sep",
  "soroban-sdk",
  "soroban-sdk-tools",
+]
+
+[[package]]
+name = "nido-preauth-sweep-policy"
+version = "0.1.0"
+dependencies = [
+ "soroban-sdk",
+ "stellar-accounts",
 ]
 
 [[package]]

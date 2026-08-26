@@ -171,7 +171,7 @@ build-ts:
 # NOTE: keep this list in sync with `[workspace.members]` in the root
 # Cargo.toml whenever a crate is added/removed -- a crate missing from this
 # list silently stops being fmt-checked.
-fmt-pkgs := "-p nido-integration-tests -p nido-zk-bench -p nido-smart-account -p nido-zk-recovery -p nido-factory -p nido-multisig-policy -p nido-name-registry -p nido-spending-limit-policy -p nido-status-message -p nido-webauthn-verifier -p nido-zk-verifier"
+fmt-pkgs := "-p nido-integration-tests -p nido-zk-bench -p nido-smart-account -p nido-zk-recovery -p nido-factory -p nido-multisig-policy -p nido-name-registry -p nido-preauth-sweep-policy -p nido-spending-limit-policy -p nido-status-message -p nido-webauthn-verifier -p nido-zk-verifier"
 
 # Check formatting and clippy
 check:
