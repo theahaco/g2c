@@ -38,6 +38,8 @@ import { pluginError } from '@openzeppelin/relayer-sdk';
  * top-level invoked function here or the relayer will 403 it (this exact regression).
  */
 export const ALLOWED_FUNCTIONS: ReadonlySet<string> = new Set([
+  // Ephemeral G
+  'approve',
   // Genesis (factory) + ZK recovery ceremony
   'create_account',
   'create_account_v2',
@@ -52,6 +54,7 @@ export const ALLOWED_FUNCTIONS: ReadonlySet<string> = new Set([
   'add_signer',
   'remove_signer',
   'execute',
+  'transfer_from',
   // Name registry
   'register',
 ]);
