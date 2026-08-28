@@ -68,6 +68,13 @@ export async function submitSorobanTransaction(
   return call({ func: args.func, auth: args.auth, skipWait: args.skipWait ?? true }, baseUrl);
 }
 
+export async function submitXdrTransaction(
+  args: { xdr: string; skipWait?: boolean },
+  baseUrl: string,
+): Promise<RelayerTxResponse> {
+  return call({ xdr: args.xdr, skipWait: args.skipWait ?? true }, baseUrl);
+}
+
 export async function getRelayerTransaction(
   transactionId: string,
   baseUrl: string,

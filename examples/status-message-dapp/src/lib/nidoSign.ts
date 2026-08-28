@@ -32,6 +32,7 @@ import {
 	signWithSessionPasskey,
 	extractFuncAndAuth,
 	submitSorobanTransaction,
+	submitXdrTransaction,
 	waitForConfirmation,
 } from "@nidohq/passkey-sdk"
 import {

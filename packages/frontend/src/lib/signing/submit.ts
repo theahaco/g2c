@@ -10,6 +10,7 @@ import type { Transaction } from "@stellar/stellar-sdk";
 import {
   type RelayerStatus,
   extractFuncAndAuth,
+  submitXdrTransaction,
   submitSorobanTransaction,
   waitForConfirmation,
 } from "../relayerClient";

@@ -333,7 +333,7 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
   import { shortAddr } from "../../lib/address";
   import { checkPasskeySupport } from "../../lib/passkeySupport";
   import { NATIVE_SAC_ID, RELAYER_SIM_SOURCE, RELAYER_URL, NETWORK_PASSPHRASE } from "../../lib/network";
-  import { extractFuncAndAuth, submitSorobanTransaction, waitForConfirmation } from "../../lib/relayerClient";
+  import { extractFuncAndAuth, submitSorobanTransaction, submitXdrTransaction, waitForConfirmation } from "../../lib/relayerClient";
   import { syncNidoStorageViaBridge } from "../../lib/nidoSharedStorage";
   import { signAndSubmit } from "../../lib/primaryPasskeySigner";
   import { markBackupSetUp } from "../../lib/recoveryBackupPrompt";
@@ -1067,7 +1067,7 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
       console.error("Failed to query the live ledger sequence from RPC:", error);
       throw error;
     }
-  }
+  };
 
   async function grantGAllowanceToC(sourceAccount: Account, g: Keypair, c: String): void {
     console.log("granting G Allowance to C");
@@ -1126,71 +1126,35 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
       console.log("Confirmed hash: ", confirmed.hash);
       sleep(5000);
       return confirmed.hash;
-      // add wait for confirmatoin?
-  }
+  };
 
+  async function neutralizeG(g: Keypair): Promise<String> {
+    const server = new rpc.Server(RPC_URL);
+    console.log(`setting g ${g.publicKey()} key weight to 0 `);
+    const gAccount = await server.getAccount(g.publicKey()); // G is its own source here
+    const tx = new TransactionBuilder(gAccount, {
+      fee: "0",
+      networkPassphrase: Networks.TESTNET,
+    }).addOperation(Operation.setOptions({ masterWeight: 0 })).setTimeout(30).build();
 
-// the source account  e5 {_accountId: 'GAL42RUBXKQSVSJWBXFTBB4GFKMPQXA3SOJVGP6UMRJT2SGEIR63JFK2', sequence: k2}
-// index.astro:1157 the source account id GAL42RUBXKQSVSJWBXFTBB4GFKMPQXA3SOJVGP6UMRJT2SGEIR63JFK2
-// contentscript.js:14083 MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 close listeners added. Use emitter.setMaxListeners() to increase limit
-// n @ contentscript.js:14083
-// u @ contentscript.js:14083
-// i.addListener @ contentscript.js:14083
-// Z.on @ contentscript.js:14082
-// i.once @ contentscript.js:14083
-// E.pipe @ contentscript.js:14063
-// q @ contentscript.js:14063
-// D @ contentscript.js:14063
-// P @ contentscript.js:14063
-// M @ contentscript.js:14063
-// C @ contentscript.js:14063
-// (anonymous) @ contentscript.js:14083
-// call.__webpack_require__._LM_.__webpack_require__.__webpack_require__ @ contentscript.js:14083
-// (anonymous) @ contentscript.js:14083
-// (anonymous) @ contentscript.js:14083
-// contentscript.js:14083 MaxListenersExceededWarning: Possible EventEmitter memory leak detected. 11 end listeners added. Use emitter.setMaxListeners() to increase limit
-// n @ contentscript.js:14083
-// u @ contentscript.js:14083
-// i.addListener @ contentscript.js:14083
-// Z.on @ contentscript.js:14082
-// O @ contentscript.js:14083
-// q @ contentscript.js:14063
-// D @ contentscript.js:14063
-// P @ contentscript.js:14063
-// M @ contentscript.js:14063
-// C @ contentscript.js:14063
+    tx.sign(g);
+    const submitted = await submitXdrTransaction({ xdr: tx.toXDR() });
+    if (!submitted.transactionId) {
+      throw new Error("Relayer accepted neutralize but returned no transaction id");
+    }
+    const confirmed = await waitForConfirmation(submitted.transactionId);
+    if (!confirmed.hash) {
+      throw new Error("Relayer confirmed neutralize but returned no transaction hash");
+    }
+    return confirmed.hash;
+  };
 
-// Z.push @ contentscript.js:14082
-// (anonymous) @ contentscript.js:14063
-// index.astro:1246 PREAUTH_SWEEP_ENABLED:  true
-// index.astro:1074 granting G Allwance to C
-// relayer.ts:36  POST https://nido.fly.dev/relay 403 (Forbidden)
-// call @ relayer.ts:36
-
-// await in deploy
-// proceedToDeploy @ index.astro:842
-// (anonymous) @ index.astro:935
-// relayer.ts:49 Uncaught (in promise) RelayerError: Relayer channels plugin: function "approve" is not in the nido relayer allowlist
-//     at call (relayer.ts:49:11)
-//     at async grantGAllowanceToC (index.astro:1104:25)
-//     at async preauthSweepPolicyFlow (index.astro:1120:7)
-// call @ relayer.ts:49
-// await in call
-// (anonymous) @ relayer.ts:68
-// (anonymous) @ relayerClient.ts:42
-// grantGAllowanceToC @ index.astro:1104
-// await in grantGAllowanceToC
-// preauthSweepPolicyFlow @ index.astro:1120
-// deploy @ index.astro:1249
-// await in deploy
-// proceedToDeploy @ index.astro:842
-// (anonymous) @ index.astro:935
-
-  
-  async function preauthSweepPolicyFlow(sourceAccount: Account, g: Keypair, c: String): void {
+  async function preauthSweepPolicyFlow(sourceAccount: Account, g: Keypair, c: String): Promise<String> {
       // have G sign the `approve(G, C, MAX, expiry)` transaction
       // giving C an allowance to G's funds
-      await grantGAllowanceToC(sourceAccount, g, c);
+      const allowanceHash = await grantGAllowanceToC(sourceAccount, g, c);
+      const neutralizeHash = await neutralizeG(g);
+      console.log(allowanceHash, neutralizeHash)
 
       // Install the sweep policy on C - need the user to sign with their passkey
       // not sure exactly how to do this from a UI perspecive, but im sure its in 
@@ -1321,10 +1285,8 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
       if (PREAUTH_SWEEP_ENABLED) {
         try {
           await preauthSweepPolicyFlow(sourceAccount, g, contractId)
-          sleep(5000);
-
         } catch(preauthSweepError) {
-          console.log("this error happened: ", preauth_sweep_error);
+          console.log("this error happened: ", preauthSweepError);
         }
       } 
       // else { //if preauth sweep policy feature not turned on, keep going with the
