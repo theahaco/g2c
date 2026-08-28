@@ -301,7 +301,7 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
 </style>
 
 <script>
-  import { Networks, TransactionBuilder, Operation, Address, Account, Keypair, nativeToScVal, rpc, xdr, hash, Contract } from "@stellar/stellar-sdk";
+  import { Networks, TransactionBuilder, Operation, Address, Account, Keypair, nativeToScVal, rpc, xdr, hash, Contract, authorizeEntry } from "@stellar/stellar-sdk";
   import { Buffer } from "buffer";
   import {
     parseRegistration,
@@ -1069,11 +1069,13 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
     }
   }
 
-  async function grantGAllowanceToC(g: Account, c: String): void {
-    console.log("granting G Allwance to C");
+  async function grantGAllowanceToC(sourceAccount: Account, g: Keypair, c: String): void {
+    console.log("granting G Allowance to C");
+    console.log("G: ", g.publicKey());
+    console.log("C: ", c);
     const server = new rpc.Server(RPC_URL);
     const liveUntil = await getMaxLiveUntilLedger();
-    const simTxn = new TransactionBuilder(g, {
+    const simTxn = new TransactionBuilder(sourceAccount, {
         fee: "100",
         networkPassphrase: Networks.TESTNET,
       })
@@ -1082,7 +1084,7 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
             contract: NATIVE_SAC_ID,
             function: "approve",
             args: [
-                  Address.fromString(g.accountId()).toScVal(), //from:Address
+                  Address.fromString(g.publicKey()).toScVal(), //from:Address
                   Address.fromString(c).toScVal(), //spender:Address
                   nativeToScVal(MAX_I128, { type: 'i128' }), // amount:i128
                   nativeToScVal(liveUntil, { type: 'u32' }) //live_until_ledger:u32
@@ -1097,11 +1099,33 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
         throw new Error(`Simulation failed: ${"error" in sim ? sim.error : "restore needed"}`);
       }
 
+      // Sign each auth entry that requires an explicit Address credential (G's,
+      const validUntilLedger = sim.latestLedger + 100;
+      const signedAuth = await Promise.all(
+        (sim.result?.auth ?? []).map((entry) =>
+          authorizeEntry(entry, g, validUntilLedger, Networks.TESTNET)
+        )
+      );
+      sim.result.auth = signedAuth; 
+
       const transaction = rpc.assembleTransaction(simTxn, sim).setTimeout(0).build();
       const { func, auth } = extractFuncAndAuth(transaction);
+      console.log("func ", func);
+      console.log("auth ", auth);
 
+      sleep(5000);
       const submitted = await submitSorobanTransaction({ func, auth });
       console.log("Submitted: ", submitted)
+
+      sleep(5000);
+
+      const confirmed = await waitForConfirmation(submitted.transactionId);
+      if (!confirmed.hash) {
+        throw new Error("Relayer confirmed approve but returned no transaction hash");
+      }
+      console.log("Confirmed hash: ", confirmed.hash);
+      sleep(5000);
+      return confirmed.hash;
       // add wait for confirmatoin?
   }
 
@@ -1163,10 +1187,10 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
 // (anonymous) @ index.astro:935
 
   
-  async function preauthSweepPolicyFlow(g: Account, c: String): void {
+  async function preauthSweepPolicyFlow(sourceAccount: Account, g: Keypair, c: String): void {
       // have G sign the `approve(G, C, MAX, expiry)` transaction
       // giving C an allowance to G's funds
-      await grantGAllowanceToC(g, c);
+      await grantGAllowanceToC(sourceAccount, g, c);
 
       // Install the sweep policy on C - need the user to sign with their passkey
       // not sure exactly how to do this from a UI perspecive, but im sure its in 
@@ -1292,10 +1316,12 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
       setCheckProgress(4, 4);
       
 
+      let g = await startTestnetFunding();
       console.log("PREAUTH_SWEEP_ENABLED: ", PREAUTH_SWEEP_ENABLED);
       if (PREAUTH_SWEEP_ENABLED) {
         try {
-          preauthSweepPolicyFlow(sourceAccount, contractId)
+          await preauthSweepPolicyFlow(sourceAccount, g, contractId)
+          sleep(5000);
 
         } catch(preauthSweepError) {
           console.log("this error happened: ", preauth_sweep_error);
