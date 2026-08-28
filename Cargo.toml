@@ -2,6 +2,7 @@
 resolver = "2"
 members = [
     "crates/integration-tests",
+    "crates/testkit",
     "crates/zk-bench",
     "contracts/*",
     # Nested under contracts/vendor/, so not matched by the "contracts/*" glob.

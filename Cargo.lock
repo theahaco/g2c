@@ -1177,6 +1177,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "nido-testkit"
+version = "0.1.0"
+dependencies = [
+ "p256",
+ "sha2",
+]
+
+[[package]]
 name = "nido-webauthn-verifier"
 version = "0.1.0"
 dependencies = [

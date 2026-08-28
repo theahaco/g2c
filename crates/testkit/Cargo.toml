@@ -1,0 +1,10 @@
+[package]
+name = "nido-testkit"
+version = "0.1.0"
+edition = "2021"
+license = "Apache-2.0"
+description = "Rust dapp-author test fixtures for Nido: deterministic local P-256 keys + synthetic WebAuthn assertions — the contract-test twin of @nidohq/testkit's secp256r1 path."
+
+[dependencies]
+p256 = { version = "0.13", features = ["ecdsa"] }
+sha2 = "0.10"

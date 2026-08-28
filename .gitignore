@@ -20,6 +20,7 @@ node_modules/
 packages/frontend/dist/
 packages/passkey-sdk/dist/
 packages/stellar-wallets-kit-module/dist/
+packages/testkit/dist/
 packages/contract-bindings/*/dist/
 
 # Astro build cache
