@@ -1,0 +1,17 @@
+{
+  "version": "0.0.0",
+  "name": "@nidohq/preauth-sweep-policy",
+  "type": "module",
+  "exports": "./dist/index.js",
+  "typings": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@stellar/stellar-sdk": "^15.1.0",
+    "buffer": "6.0.3"
+  },
+  "devDependencies": {
+    "typescript": "^5.6.2"
+  }
+}
