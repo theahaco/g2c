@@ -339,7 +339,8 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
   import { markBackupSetUp } from "../../lib/recoveryBackupPrompt";
   import { initWalletKit, connect as connectWallet } from "../../lib/walletConnect";
   import { deriveM2SecretSafely } from "../../lib/walletRecoverySign";
-
+  import { Client as SmartAccountClient } from '@nidohq/smart-account';
+  import { Client as PreauthSweepPolicyClient } from "@nidohq/preauth-sweep-policy";
   const RPC_URL = "https://soroban-testnet.stellar.org";
   const FRIENDBOT_URL = "https://friendbot.stellar.org";
   const TESTNET_TOPUP_STROOPS = 99_900_000_000n;
@@ -1113,18 +1114,14 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
       console.log("func ", func);
       console.log("auth ", auth);
 
-      sleep(5000);
       const submitted = await submitSorobanTransaction({ func, auth });
       console.log("Submitted: ", submitted)
-
-      sleep(5000);
 
       const confirmed = await waitForConfirmation(submitted.transactionId);
       if (!confirmed.hash) {
         throw new Error("Relayer confirmed approve but returned no transaction hash");
       }
       console.log("Confirmed hash: ", confirmed.hash);
-      sleep(5000);
       return confirmed.hash;
   };
 
@@ -1149,19 +1146,73 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
     return confirmed.hash;
   };
 
-  async function preauthSweepPolicyFlow(sourceAccount: Account, g: Keypair, c: String): Promise<String> {
-      // have G sign the `approve(G, C, MAX, expiry)` transaction
-      // giving C an allowance to G's funds
-      const allowanceHash = await grantGAllowanceToC(sourceAccount, g, c);
-      const neutralizeHash = await neutralizeG(g);
-      console.log(allowanceHash, neutralizeHash)
 
+
+  // Dummy contract id -- we only need the embedded static `.spec`, never an
+  // RPC call (same trick as `multisigRotation.ts::thresholdPolicySpec`).
+  const DUMMY_CONTRACT_ID = 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4';
+  let memoizedSmartAccountSpec: Spec | undefined;
+  function smartAccountSpec(): Spec {
+    memoizedSmartAccountSpec ??= new SmartAccountClient({
+      contractId: DUMMY_CONTRACT_ID,
+      networkPassphrase: NETWORK_PASSPHRASE,
+      rpcUrl: RPC_URL,
+    }).spec;
+    return memoizedSmartAccountSpec!;
+  }
+
+  let memoizedSweepPolicySpec: Spec | undefined;
+function sweepPolicySpec(): Spec {
+  memoizedSweepPolicySpec ??= new PreauthSweepPolicyClient({
+    contractId: DUMMY_CONTRACT_ID,
+    networkPassphrase: NETWORK_PASSPHRASE,
+    rpcUrl: RPC_URL,
+  }).spec;
+  return memoizedSweepPolicySpec!;
+}
+
+  async function installSweepPolicy(c: String, g: Keypair): Promise<String> {
+    const policyContractId = await fetchRegistryAddress("preauth-sweep-policy");
+    console.log("getting sweep policy spec... ")
+    const installParamsScVal = sweepPolicySpec().nativeToUdt(
+      { source: g.publicKey() },
+      "PreauthSweepParams"
+    );
+    const spec = smartAccountSpec();
+    console.log("spec ", spec);
+    const scVals = spec.funcArgsToScVals("add_context_rule", {
+      context_type: { tag: "CallContract", values: [NATIVE_SAC_ID] },
+      name: "preauth-sweep",
+      valid_until: undefined, 
+      signers: [],
+      policies: new Map([
+        [policyContractId, installParamsScVal],
+      ]),
+    });
+    console.log("scVals ", scVals);
+
+    const installOp = new Contract(c).call("add_context_rule", ...scVals);
+    console.log("installOp ", installOp);
+    // currently running into a relayer error: Too many transactions queued. Please try again later
+    // this is a temporary fix, and needs to be reevaluated
+    sleep(5000);
+    const result = await signAndSubmit({ account: c, operation: installOp });
+    return result.hash;
+  }
+
+  async function preauthSweepPolicyFlow(sourceAccount: Account, g: Keypair, c: String): Promise<void> {
+      // create an allowance from G to C via `approve(G, C, MAX, expiry)`
+      const allowanceHash = await grantGAllowanceToC(sourceAccount, g, c);
+
+      // set G account key weight to 0, neutralizing it
+      const neutralizeHash = await neutralizeG(g);
+      console.log("allowance tx hash: ", allowanceHash, "\nneutralize G tx hash: ", neutralizeHash)
+
+      const installSweep = await installSweepPolicy(c, g);
       // Install the sweep policy on C - need the user to sign with their passkey
       // not sure exactly how to do this from a UI perspecive, but im sure its in 
       // this file somewhere
-
-
-      // G signs a transaction setting it's signer weight to 0, neutralizing it
+      console.log("installSweep ", installSweep);
 
       // give the user the G address telling them to send their money to it
   }
@@ -1289,7 +1340,7 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
           console.log("this error happened: ", preauthSweepError);
         }
       } 
-      // else { //if preauth sweep policy feature not turned on, keep going with the
+      else { //if preauth sweep policy feature not turned on, keep going with the
               // old way of transfering XLM from G -> C
         try {
           await drainTestnetFunding(server, contractId!);
@@ -1305,6 +1356,7 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
               : "Couldn't finish setting up your wallet."
           );
           return;
+        }
       }
 
       // Recovery enrollment (seed/wallet choices only) — deliberately a
