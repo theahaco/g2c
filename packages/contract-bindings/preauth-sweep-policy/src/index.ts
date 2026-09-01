@@ -22,10 +22,6 @@ import type {
   Duration,
 } from "@stellar/stellar-sdk/contract";
 
-// Generated bindings reference `Context` but did not import it; we never
-// call enforce/can_enforce from JS, so an alias to `unknown` suffices.
-type Context = unknown;
-
 export * from "@stellar/stellar-sdk";
 export * as contract from "@stellar/stellar-sdk/contract";
 export * as rpc from "@stellar/stellar-sdk/rpc";
