@@ -1,53 +1,57 @@
-# Nido
+<div align="center">
+  <img
+    src="packages/frontend/public/favicon.svg"
+    alt="Nido nest ring logo"
+    width="96"
+    height="96"
+  />
 
-**Passkey-native smart accounts for Stellar.**
+  <h1>Nido</h1>
 
-Nido is an open-source account abstraction stack for Stellar: a browser wallet,
-Soroban smart contracts, and developer tooling that help users move from
-classic Stellar G-addresses to passkey-secured smart accounts (C-addresses).
+  <p><strong>A safe place for everything you own: money, identity, and access.</strong></p>
 
-The goal is simple: make a Stellar smart account feel like a modern app login.
-Users create or recover an account with a passkey, dApps can request signatures
-through standard wallet flows, and every passkey authorization is verified
-on-chain.
+  <p>
+    Create your Nido in seconds with a passkey. Nothing to memorize, no browser
+    extension to install, and every approval is verified by Stellar smart contracts.
+  </p>
 
-> The hosted wallet currently targets Stellar testnet. Do not use it for real
-> funds.
+  <p>
+    <a href="https://nido.fyi"><strong>Launch testnet wallet</strong></a>
+    |
+    <a href="./docs/USAGE.md">Usage guide</a>
+    |
+    <a href="./ARCHITECTURE.md">Architecture</a>
+    |
+    <a href="./DEPLOYED.md">Deployments</a>
+    |
+    <a href="./examples/status-message-dapp/README.md">Example dApp</a>
+  </p>
 
-## Highlights
+  <p>
+    <img alt="Network: Stellar testnet" src="https://img.shields.io/badge/network-Stellar%20testnet-0E9AA8" />
+    <img alt="License: Apache-2.0" src="https://img.shields.io/badge/license-Apache--2.0-F25C2A" />
+  </p>
 
-- **Passkey-secured C-addresses:** WebAuthn/P-256 signatures are verified by
-  Soroban contracts, not by a custodial backend.
-- **Classic-to-smart-account onboarding:** The factory contract deterministically
-  deploys a smart account from a funded G-address and installs the user's
-  passkey as the first signer.
-- **Nido wallet app:** An Astro frontend for account creation, account
-  management, sending, transaction signing, recovery, and scoped delegation.
-- **Developer SDK:** TypeScript helpers for WebAuthn parsing, smart-account
-  authorization hashes, signature injection, deployment, recovery, and session
-  key workflows.
-- **Wallet selector integration:** A Stellar Wallets Kit module lets dApps add
-  Nido next to Freighter, xBull, Albedo, and other Stellar wallets.
-- **Policy-ready accounts:** Recovery, session keys, spending limits, name
-  registry support, and example dApp integrations are included in the repo.
+  <p><sub>The hosted wallet currently targets Stellar testnet. Do not use it for real funds.</sub></p>
+</div>
 
-## Live Links
+## Why Nido
 
-| Link | Purpose |
+| For users | For developers |
 | --- | --- |
-| [nido.fyi](https://nido.fyi) | Hosted testnet wallet |
-| [Architecture](./ARCHITECTURE.md) | Detailed system design, data flows, and security model |
-| [Deployments](./DEPLOYED.md) | Current testnet contract addresses |
+| Create an account with a passkey instead of a seed phrase or browser extension. | Add Nido to a Stellar dApp through the Wallets Kit module. |
+| Own a Stellar smart account that can hold money, identity, and access. | Use TypeScript helpers for WebAuthn, Soroban auth, deployment, recovery, and session keys. |
+| Recover access and add rules without relying on a custodial backend. | Build on Soroban contracts that verify passkey approvals on-chain. |
 
 ## How It Works
 
-1. **Create an account:** The wallet reserves a deterministic C-address for a
-   funding G-address.
-2. **Create a passkey:** The browser runs a WebAuthn ceremony and extracts the
-   user's P-256 public key.
-3. **Deploy atomically:** The factory deploys a Soroban smart account, installs
-   the passkey signer, and moves funds into the new account.
-4. **Sign with intent:** dApps request signatures through Nido, the Stellar
+1. **Create your Nido:** The wallet reserves a deterministic smart-account
+   C-address and prepares the setup flow.
+2. **Confirm with a passkey:** The browser runs a WebAuthn ceremony and extracts
+   the user's P-256 public key.
+3. **Publish to Stellar:** The factory deploys a Soroban smart account, installs
+   the passkey signer, and moves testnet funds into the new account.
+4. **Use it with dApps:** dApps request signatures through Nido, the Stellar
    Wallets Kit module, or direct handoff URLs.
 5. **Verify on-chain:** The smart account calls the WebAuthn verifier contract
    during `__check_auth`, then applies context rules and policy checks before
@@ -141,19 +145,21 @@ for local network, testnet, and GitHub Pages deployment details.
 ## Security Model
 
 - **No custody:** The wallet does not hold a server-side signing key.
-- **On-chain passkey verification:** WebAuthn assertions are checked by the
+- **Passkeys verified on-chain:** WebAuthn assertions are checked by the
   verifier contract during Soroban authorization.
-- **Per-account origin binding:** Account subdomains scope WebAuthn RP IDs so a
+- **Origin-bound accounts:** Account subdomains scope WebAuthn RP IDs so a
   passkey for one account cannot approve another account.
 - **Ephemeral G-address funding:** The onboarding G-key is used to fund and
   deploy the smart account, then discarded.
-- **Policy enforcement:** Context rules, recovery policies, session keys, and
-  spending limits are enforced by the smart account and policy contracts.
+- **Recovery and policy controls:** Context rules, recovery policies, session
+  keys, and spending limits are enforced by the smart account and policy
+  contracts.
 
 For deeper implementation details, read [ARCHITECTURE.md](./ARCHITECTURE.md).
 
 ## Documentation
 
+- [Usage guide](./docs/USAGE.md)
 - [Architecture](./ARCHITECTURE.md)
 - [Current deployments](./DEPLOYED.md)
 - [SCF application notes](./docs/APPLICATION.md)
