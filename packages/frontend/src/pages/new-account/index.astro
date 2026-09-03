@@ -341,6 +341,7 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
   import { deriveM2SecretSafely } from "../../lib/walletRecoverySign";
   import { Client as SmartAccountClient } from '@nidohq/smart-account';
   import { Client as PreauthSweepPolicyClient } from "@nidohq/preauth-sweep-policy";
+  import { saveEphemeralGAddress } from "../../lib/ephemeralG.js"
   const RPC_URL = "https://soroban-testnet.stellar.org";
   const FRIENDBOT_URL = "https://friendbot.stellar.org";
   const TESTNET_TOPUP_STROOPS = 99_900_000_000n;
@@ -1212,9 +1213,12 @@ function sweepPolicySpec(): Spec {
       // Install the sweep policy on C - need the user to sign with their passkey
       // not sure exactly how to do this from a UI perspecive, but im sure its in 
       // this file somewhere
-      console.log("installSweep ", installSweep);
+      saveEphemeralGAddress(c, g.publicKey());
 
-      // give the user the G address telling them to send their money to it
+
+      // EE TODO: better error handling!!!
+      // if any of this fails, right now it continues onto the next page, but the account isnt fully set up
+      console.log("installSweep ", installSweep);
   }
 
   // --- Step 2 · Setting up your Nido (deploy account) ---
