@@ -1071,10 +1071,7 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
     }
   };
 
-  async function grantGAllowanceToC(sourceAccount: Account, g: Keypair, c: String): void {
-    console.log("granting G Allowance to C");
-    console.log("G: ", g.publicKey());
-    console.log("C: ", c);
+  async function grantGAllowanceToC(sourceAccount: Account, g: Keypair, c: String): Promise<String> {
     const server = new rpc.Server(RPC_URL);
     const liveUntil = await getMaxLiveUntilLedger();
     const simTxn = new TransactionBuilder(sourceAccount, {
@@ -1163,16 +1160,16 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
   }
 
   let memoizedSweepPolicySpec: Spec | undefined;
-function sweepPolicySpec(): Spec {
-  memoizedSweepPolicySpec ??= new PreauthSweepPolicyClient({
-    contractId: DUMMY_CONTRACT_ID,
-    networkPassphrase: NETWORK_PASSPHRASE,
-    rpcUrl: RPC_URL,
-  }).spec;
-  return memoizedSweepPolicySpec!;
-}
+  function sweepPolicySpec(): Spec {
+    memoizedSweepPolicySpec ??= new PreauthSweepPolicyClient({
+      contractId: DUMMY_CONTRACT_ID,
+      networkPassphrase: NETWORK_PASSPHRASE,
+      rpcUrl: RPC_URL,
+    }).spec;
+    return memoizedSweepPolicySpec!;
+  }
 
-  async function installSweepPolicy(c: String, g: Keypair): Promise<String> {
+  async function installSweepPolicy(c: String, g: Keypair):  Promise<RelayerTxResponse> {
     const policyContractId = await fetchRegistryAddress("preauth-sweep-policy");
     console.log("getting sweep policy spec... ")
     const installParamsScVal = sweepPolicySpec().nativeToUdt(
@@ -1196,20 +1193,42 @@ function sweepPolicySpec(): Spec {
     console.log("installOp ", installOp);
     // currently running into a relayer error: Too many transactions queued. Please try again later
     // this is a temporary fix, and needs to be reevaluated
-    sleep(5000);
-    const result = await signAndSubmit({ account: c, operation: installOp });
-    return result.hash;
+    // const submitted = await signAndSubmit({ account: c, operation: installOp });
+    // const confirmed = await waitForConfirmation(submitted.transactionId);
+    // console.log("confirmed ", confirmed)
+    // return confirmed;
+
+    let submitted;
+    try {
+      submitted = await signAndSubmit({ account: c, operation: installOp });
+    } catch (err) {
+      console.log("install: signAndSubmit failed, full error:", err);
+      throw err;
+    }
+
+    try {
+      const confirmed = await waitForConfirmation(submitted.transactionId);
+      console.log("install: confirmed", confirmed);
+      return confirmed;
+    } catch (err) {
+      console.log("install: waitForConfirmation failed for tx", submitted.transactionId, "full error:", err);
+      throw err;
+    }
   }
 
   async function preauthSweepPolicyFlow(sourceAccount: Account, g: Keypair, c: String): Promise<void> {
       // create an allowance from G to C via `approve(G, C, MAX, expiry)`
       const allowanceHash = await grantGAllowanceToC(sourceAccount, g, c);
 
+      await sleep(10000);
       // set G account key weight to 0, neutralizing it
       const neutralizeHash = await neutralizeG(g);
       console.log("allowance tx hash: ", allowanceHash, "\nneutralize G tx hash: ", neutralizeHash)
 
+
+      await sleep(5000);
       const installSweep = await installSweepPolicy(c, g);
+
       // Install the sweep policy on C - need the user to sign with their passkey
       // not sure exactly how to do this from a UI perspecive, but im sure its in 
       // this file somewhere
@@ -1218,7 +1237,7 @@ function sweepPolicySpec(): Spec {
 
       // EE TODO: better error handling!!!
       // if any of this fails, right now it continues onto the next page, but the account isnt fully set up
-      console.log("installSweep ", installSweep);
+      // console.log("installSweep ", installSweep);
   }
 
   // --- Step 2 · Setting up your Nido (deploy account) ---
@@ -1269,7 +1288,7 @@ function sweepPolicySpec(): Spec {
         .addOperation(
           Operation.invokeContractFunction({
             contract: await fetchRegistryAddress("factory"),
-            function: ZK_PREVIEW_ENABLED ? "create_account_v2" : "create_account", //is this where the ephemeral G is created?
+            function: ZK_PREVIEW_ENABLED ? "create_account_v2" : "create_account",
             args: ZK_PREVIEW_ENABLED
               ? [
                   xdr.ScVal.scvBytes(Buffer.from(saltBytes())),
