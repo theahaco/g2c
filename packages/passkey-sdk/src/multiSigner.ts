@@ -121,7 +121,8 @@ function sigDataScVal(s: SignerSignature): xdr.ScVal {
  */
 export function buildAuthPayloadScVal(spec: AuthPayloadSpec): xdr.ScVal {
   if (spec.signers.length === 0) {
-    throw new Error('buildAuthPayloadScVal: at least one signer required');
+    //TODO: fix this? we want to make sure that 0 signers are possible. should this be a different fn altogether? or can we just remove this check
+    // throw new Error('buildAuthPayloadScVal: at least one signer required');
   }
   // Soroban requires ScMap entries to be sorted by key. The host orders
   // ScVal keys by their XDR-serialized byte sequence, so sort entries by the

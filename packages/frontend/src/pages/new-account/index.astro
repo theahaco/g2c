@@ -301,7 +301,7 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
 </style>
 
 <script>
-  import { Networks, TransactionBuilder, Operation, Address, Account, Keypair, nativeToScVal, rpc, xdr, hash, Contract } from "@stellar/stellar-sdk";
+  import { Networks, TransactionBuilder, Operation, Address, Account, Keypair, nativeToScVal, rpc, xdr, hash, Contract, authorizeEntry } from "@stellar/stellar-sdk";
   import { Buffer } from "buffer";
   import {
     parseRegistration,
@@ -333,13 +333,15 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
   import { shortAddr } from "../../lib/address";
   import { checkPasskeySupport } from "../../lib/passkeySupport";
   import { NATIVE_SAC_ID, RELAYER_SIM_SOURCE, RELAYER_URL, NETWORK_PASSPHRASE } from "../../lib/network";
-  import { extractFuncAndAuth, submitSorobanTransaction, waitForConfirmation } from "../../lib/relayerClient";
+  import { extractFuncAndAuth, submitSorobanTransaction, submitXdrTransaction, waitForConfirmation } from "../../lib/relayerClient";
   import { syncNidoStorageViaBridge } from "../../lib/nidoSharedStorage";
   import { signAndSubmit } from "../../lib/primaryPasskeySigner";
   import { markBackupSetUp } from "../../lib/recoveryBackupPrompt";
   import { initWalletKit, connect as connectWallet } from "../../lib/walletConnect";
   import { deriveM2SecretSafely } from "../../lib/walletRecoverySign";
-
+  import { Client as SmartAccountClient } from '@nidohq/smart-account';
+  import { Client as PreauthSweepPolicyClient } from "@nidohq/preauth-sweep-policy";
+  import { saveEphemeralGAddress } from "../../lib/ephemeralG.js"
   const RPC_URL = "https://soroban-testnet.stellar.org";
   const FRIENDBOT_URL = "https://friendbot.stellar.org";
   const TESTNET_TOPUP_STROOPS = 99_900_000_000n;
@@ -353,6 +355,8 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
   // preview pair while this is set. Production (unset/falsy) is unchanged.
   // See DEPLOYED.md's "Preview (factory-v2)" section.
   const ZK_PREVIEW_ENABLED = Boolean(import.meta.env.PUBLIC_ZK_PREVIEW);
+
+  const PREAUTH_SWEEP_ENABLED = Boolean(import.meta.env.PUBLIC_PREAUTH_SWEEP)
 
   // --- State ---
 
@@ -560,10 +564,16 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
       : new Error("Funded setup account is not available yet.");
   }
 
+  // Stand in for Relayer created ephemeral G
+  // create a keypair
+  // fund it with friendbot
+
+
+  // TODO: rename this - generateOrRetrieveGAddress():
   async function startTestnetFunding(): Promise<Keypair> {
     if (testnetFundingPromise) return testnetFundingPromise;
     testnetFundingPromise = (async () => {
-      const keypair = Keypair.random();
+      const keypair = Keypair.random(); 
       const resp = await fetch(`${FRIENDBOT_URL}?addr=${keypair.publicKey()}`);
       if (!resp.ok) {
         const detail = await resp.text().catch(() => resp.statusText);
@@ -578,6 +588,7 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
     return testnetFundingPromise;
   }
 
+  //TODO: remove this, this should in future be the watcher calling the sweep
   async function drainTestnetFunding(server: rpc.Server, destination: string): Promise<void> {
     const keypair = await startTestnetFunding();
     const sourceAccount = await waitForSourceAccount(server, keypair.publicKey());
@@ -591,7 +602,7 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
           function: "transfer",
           args: [
             Address.fromString(keypair.publicKey()).toScVal(),
-            Address.fromString(destination).toScVal(),
+            Address.fromString(destination).toScVal(), // this is the new smart account
             nativeToScVal(TESTNET_TOPUP_STROOPS, { type: "i128" }),
           ],
         })
@@ -724,7 +735,10 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
     return hex2buf(saltHex);
   }
 
+  // *****************************************************
   async function reserveNidoAddress(): Promise<string> {
+    console.log("in reserveNido trying to find the relayer url -> ", RELAYER_URL);
+    console.log("in reserveNido trying to find the sim source-> ", RELAYER_SIM_SOURCE);
     if (!RELAYER_URL || !RELAYER_SIM_SOURCE) {
       throw new Error("Relayer is not configured for account setup.");
     }
@@ -737,7 +751,7 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
     })
       .addOperation(
         Operation.invokeContractFunction({
-          contract: await fetchRegistryAddress("factory"),
+          contract: await fetchRegistryAddress("factory"), //this is invoking the factory contract to get_c_address - is this creating a new c here? no its just getting the predetermined c address
           function: "get_c_address",
           args: [xdr.ScVal.scvBytes(Buffer.from(saltBytes()))],
         }),
@@ -1038,6 +1052,194 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
     }
   }
 
+  const MAX_I128 = (2n ** 127n) - 1n;
+
+  async function getMaxLiveUntilLedger() {
+    const server = new rpc.Server(RPC_URL);
+    try {
+      const latestLedgerResponse = await server.getLatestLedger();
+      const currentLedger = latestLedgerResponse.sequence;
+      const MAX_NETWORK_TTL = 3110400;
+      const SAFETY_BUFFER = 100;
+
+      const maximumSafeLiveUntil = currentLedger + (MAX_NETWORK_TTL - SAFETY_BUFFER);
+
+      return maximumSafeLiveUntil;
+    } catch (error) {
+      console.error("Failed to query the live ledger sequence from RPC:", error);
+      throw error;
+    }
+  };
+
+  async function grantGAllowanceToC(sourceAccount: Account, g: Keypair, c: String): Promise<String> {
+    const server = new rpc.Server(RPC_URL);
+    const liveUntil = await getMaxLiveUntilLedger();
+    const simTxn = new TransactionBuilder(sourceAccount, {
+        fee: "100",
+        networkPassphrase: Networks.TESTNET,
+      })
+        .addOperation(
+          Operation.invokeContractFunction({
+            contract: NATIVE_SAC_ID,
+            function: "approve",
+            args: [
+                  Address.fromString(g.publicKey()).toScVal(), //from:Address
+                  Address.fromString(c).toScVal(), //spender:Address
+                  nativeToScVal(MAX_I128, { type: 'i128' }), // amount:i128
+                  nativeToScVal(liveUntil, { type: 'u32' }) //live_until_ledger:u32
+                ],
+          })
+        )
+        .setTimeout(0)
+        .build();
+
+      const sim = await server.simulateTransaction(simTxn);
+      if (rpc.Api.isSimulationError(sim) || rpc.Api.isSimulationRestore(sim)) {
+        throw new Error(`Simulation failed: ${"error" in sim ? sim.error : "restore needed"}`);
+      }
+
+      // Sign each auth entry that requires an explicit Address credential (G's,
+      const validUntilLedger = sim.latestLedger + 100;
+      const signedAuth = await Promise.all(
+        (sim.result?.auth ?? []).map((entry) =>
+          authorizeEntry(entry, g, validUntilLedger, Networks.TESTNET)
+        )
+      );
+      sim.result.auth = signedAuth; 
+
+      const transaction = rpc.assembleTransaction(simTxn, sim).setTimeout(0).build();
+      const { func, auth } = extractFuncAndAuth(transaction);
+      console.log("func ", func);
+      console.log("auth ", auth);
+
+      const submitted = await submitSorobanTransaction({ func, auth });
+      console.log("Submitted: ", submitted)
+
+      const confirmed = await waitForConfirmation(submitted.transactionId);
+      if (!confirmed.hash) {
+        throw new Error("Relayer confirmed approve but returned no transaction hash");
+      }
+      console.log("Confirmed hash: ", confirmed.hash);
+      return confirmed.hash;
+  };
+
+  async function neutralizeG(g: Keypair): Promise<String> {
+    const server = new rpc.Server(RPC_URL);
+    console.log(`setting g ${g.publicKey()} key weight to 0 `);
+    const gAccount = await server.getAccount(g.publicKey()); // G is its own source here
+    const tx = new TransactionBuilder(gAccount, {
+      fee: "0",
+      networkPassphrase: Networks.TESTNET,
+    }).addOperation(Operation.setOptions({ masterWeight: 0 })).setTimeout(30).build();
+
+    tx.sign(g);
+    const submitted = await submitXdrTransaction({ xdr: tx.toXDR() });
+    if (!submitted.transactionId) {
+      throw new Error("Relayer accepted neutralize but returned no transaction id");
+    }
+    const confirmed = await waitForConfirmation(submitted.transactionId);
+    if (!confirmed.hash) {
+      throw new Error("Relayer confirmed neutralize but returned no transaction hash");
+    }
+    return confirmed.hash;
+  };
+
+
+
+  // Dummy contract id -- we only need the embedded static `.spec`, never an
+  // RPC call (same trick as `multisigRotation.ts::thresholdPolicySpec`).
+  const DUMMY_CONTRACT_ID = 'CAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAABSC4';
+  let memoizedSmartAccountSpec: Spec | undefined;
+  function smartAccountSpec(): Spec {
+    memoizedSmartAccountSpec ??= new SmartAccountClient({
+      contractId: DUMMY_CONTRACT_ID,
+      networkPassphrase: NETWORK_PASSPHRASE,
+      rpcUrl: RPC_URL,
+    }).spec;
+    return memoizedSmartAccountSpec!;
+  }
+
+  let memoizedSweepPolicySpec: Spec | undefined;
+  function sweepPolicySpec(): Spec {
+    memoizedSweepPolicySpec ??= new PreauthSweepPolicyClient({
+      contractId: DUMMY_CONTRACT_ID,
+      networkPassphrase: NETWORK_PASSPHRASE,
+      rpcUrl: RPC_URL,
+    }).spec;
+    return memoizedSweepPolicySpec!;
+  }
+
+  async function installSweepPolicy(c: String, g: Keypair):  Promise<RelayerTxResponse> {
+    const policyContractId = await fetchRegistryAddress("preauth-sweep-policy");
+    console.log("getting sweep policy spec... ")
+    const installParamsScVal = sweepPolicySpec().nativeToUdt(
+      { source: g.publicKey() },
+      "PreauthSweepParams"
+    );
+    const spec = smartAccountSpec();
+    console.log("spec ", spec);
+    const scVals = spec.funcArgsToScVals("add_context_rule", {
+      context_type: { tag: "CallContract", values: [NATIVE_SAC_ID] },
+      name: "preauth-sweep",
+      valid_until: undefined, 
+      signers: [],
+      policies: new Map([
+        [policyContractId, installParamsScVal],
+      ]),
+    });
+    console.log("scVals ", scVals);
+
+    const installOp = new Contract(c).call("add_context_rule", ...scVals);
+    console.log("installOp ", installOp);
+    // currently running into a relayer error: Too many transactions queued. Please try again later
+    // this is a temporary fix, and needs to be reevaluated
+    // const submitted = await signAndSubmit({ account: c, operation: installOp });
+    // const confirmed = await waitForConfirmation(submitted.transactionId);
+    // console.log("confirmed ", confirmed)
+    // return confirmed;
+
+    let submitted;
+    try {
+      submitted = await signAndSubmit({ account: c, operation: installOp });
+    } catch (err) {
+      console.log("install: signAndSubmit failed, full error:", err);
+      throw err;
+    }
+
+    try {
+      const confirmed = await waitForConfirmation(submitted.transactionId);
+      console.log("install: confirmed", confirmed);
+      return confirmed;
+    } catch (err) {
+      console.log("install: waitForConfirmation failed for tx", submitted.transactionId, "full error:", err);
+      throw err;
+    }
+  }
+
+  async function preauthSweepPolicyFlow(sourceAccount: Account, g: Keypair, c: String): Promise<void> {
+      saveEphemeralGAddress(c, g.publicKey());
+      // create an allowance from G to C via `approve(G, C, MAX, expiry)`
+      const allowanceHash = await grantGAllowanceToC(sourceAccount, g, c);
+
+      await sleep(10000);
+      // set G account key weight to 0, neutralizing it
+      const neutralizeHash = await neutralizeG(g);
+      console.log("allowance tx hash: ", allowanceHash, "\nneutralize G tx hash: ", neutralizeHash)
+
+
+      await sleep(10000);
+      const installSweep = await installSweepPolicy(c, g);
+
+      // Install the sweep policy on C - need the user to sign with their passkey
+      // not sure exactly how to do this from a UI perspecive, but im sure its in 
+      // this file somewhere
+
+
+      // EE TODO: better error handling!!!
+      // if any of this fails, right now it continues onto the next page, but the account isnt fully set up
+      // console.log("installSweep ", installSweep);
+  }
+
   // --- Step 2 · Setting up your Nido (deploy account) ---
 
   async function deploy() {
@@ -1060,7 +1262,11 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
       const simulationSource = RELAYER_SIM_SOURCE;
       const server = new rpc.Server(RPC_URL);
 
+      // This is G
       const sourceAccount = await waitForSourceAccount(server, simulationSource);
+      console.log("the source account ", sourceAccount);
+      console.log("the source account id", sourceAccount.accountId());
+
 
       // ZK preview mode: fold enrollment into the creation tx itself via
       // `create_account_v2(salt, key, commitment)` — the SAME call shape for
@@ -1122,26 +1328,58 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
       clearSetupSaltCookie(contractId!);
       await syncNidoStorageViaBridge();
 
-      // Confirmed — 3 done, 4 · "Finalizing your wallet" begins. Behind this card
+      // Confirmed — 3 done, 4 · "Finalizing your wallet" begins. 
+      // 
+      // 
+      // REPLACING THIS FLOW: Behind this card
       // we drain the friendbot-funded keypair into the account; it must follow
       // deploy since the account contract is the transfer destination. The funding
       // itself already ran in parallel with steps 1–3, so this is usually a quick
       // transfer rather than a fresh wait.
+
+
+      // Behind this card we have G sign the `approve(G, C, MAX, expiry)` transaction
+      // giving C an allowance to G's funds
+
+      // Install the sweep policy on C - need the user to sign with their passkey
+      // not sure exactly how to do this from a UI perspecive, but im sure its in 
+      // this file somewhere
+
+
+      // G signs a transaction setting it's signer weight to 0, neutralizing it
+
+      // give the user the G address telling them to send their money to it
+
+      // fix the check progress?
       setCheckProgress(4, 4);
-      try {
-        await drainTestnetFunding(server, contractId!);
-      } catch (fundingErr) {
-        console.warn("[nido] wallet finalize failed", fundingErr);
-        renderCheck(4, "pending");
-        renderCheck(5, "pending");
-        $deployNestSpinning.style.display = "none";
-        $deployNestStatic.style.display = "block";
-        showError(
-          fundingErr instanceof Error
-            ? `Couldn't finish setting up your wallet: ${fundingErr.message}`
-            : "Couldn't finish setting up your wallet."
-        );
-        return;
+      
+
+      let g = await startTestnetFunding();
+      console.log("PREAUTH_SWEEP_ENABLED: ", PREAUTH_SWEEP_ENABLED);
+      if (PREAUTH_SWEEP_ENABLED) {
+        try {
+          await preauthSweepPolicyFlow(sourceAccount, g, contractId)
+        } catch(preauthSweepError) {
+          console.log("this error happened: ", preauthSweepError);
+        }
+      } 
+      else { //if preauth sweep policy feature not turned on, keep going with the
+              // old way of transfering XLM from G -> C
+        try {
+          await drainTestnetFunding(server, contractId!);
+        } catch (fundingErr) {
+          console.warn("[nido] wallet finalize failed", fundingErr);
+          renderCheck(4, "pending");
+          renderCheck(5, "pending");
+          $deployNestSpinning.style.display = "none";
+          $deployNestStatic.style.display = "block";
+          showError(
+            fundingErr instanceof Error
+              ? `Couldn't finish setting up your wallet: ${fundingErr.message}`
+              : "Couldn't finish setting up your wallet."
+          );
+          return;
+        }
       }
 
       // Recovery enrollment (seed/wallet choices only) — deliberately a
@@ -1234,3 +1472,23 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
     }
   }
 </script>
+
+
+
+/*
+# Plan
+## Reuse the funding keypair as G
+- first iteration, let friendbot funding happen inside the app as is - still to include reserve
+- then, make the friendbot funding happen outside the app - still to include the reserves
+- next, work on the sponsored reserves bit - make G have 0 balance, and sponsored reserves
+
+- C installs the sweep policy - can be done in a similar pattern as enroll_zk_recovery
+
+
+- G signs approve, creating the allowance
+- set G master weight to 0
+- make sure to set G's secret to null after registration
+
+- can i reuse startTestnetFunding()?
+- eventually this will need to be moved to the server, and not live in the browser - maybe part of Milestone 3
+*/

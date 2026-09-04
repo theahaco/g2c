@@ -18,6 +18,7 @@
     "@scure/bip39": "^2.2.0",
     "@nidohq/factory": "*",
     "@nidohq/passkey-sdk": "*",
+    "@nidohq/preauth-sweep-policy": "*",
     "@nidohq/smart-account": "*",
     "@nidohq/spending-limit-policy": "*",
     "@nidohq/status-message": "*",

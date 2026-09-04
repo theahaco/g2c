@@ -61,6 +61,7 @@ export type { FetchRegistryAddressOptions } from "./registry.js";
 export {
   RelayerError,
   submitSorobanTransaction,
+  submitXdrTransaction,
   getRelayerTransaction,
   waitForConfirmation,
   extractFuncAndAuth,

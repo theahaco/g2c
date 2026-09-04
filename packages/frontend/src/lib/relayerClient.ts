@@ -13,10 +13,12 @@ export {
 } from "@nidohq/passkey-sdk";
 import {
   submitSorobanTransaction as sdkSubmit,
+  submitXdrTransaction as sdkSubmitXdr,
   getRelayerTransaction as sdkGet,
   waitForConfirmation as sdkWait,
   DEFAULT_EXPIRATION_OFFSET,
 } from "@nidohq/passkey-sdk";
+
 
 export function relayerEnabled(): boolean {
   return RELAYER_URL.length > 0;
@@ -40,6 +42,11 @@ export const submitSorobanTransaction = (
   args: { func: string; auth: string[]; skipWait?: boolean },
   baseUrl: string = RELAYER_URL,
 ) => sdkSubmit(args, baseUrl);
+
+export const submitXdrTransaction = (
+  args: { xdr: string; skipWait?: boolean },
+  baseUrl: string = RELAYER_URL,
+) => sdkSubmitXdr(args, baseUrl)
 
 export const getRelayerTransaction = (id: string, baseUrl: string = RELAYER_URL) => sdkGet(id, baseUrl);
 

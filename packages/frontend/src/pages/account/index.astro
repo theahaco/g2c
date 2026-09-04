@@ -111,6 +111,11 @@ import MyNidoMenu from "../../components/MyNidoMenu.astro";
     <!-- ============================================================= -->
     <div id="home-mode" class="hidden screen-in home-mode">
       <div class="card-grid">
+
+      <div id="trigger-sweep">
+          <button id="sweep-button" type="button" aria-label="Trigger sweep" class="btn acc sm" style="flex:0 0 auto;">Trigger Sweep</button>
+      </div>
+
       <!-- Recovery-backup prompt: enrollment is chain-invisible by design, so
            this shows off a LOCAL advisory flag (recoveryBackupPrompt.ts) —
            hidden once a backup is recorded, snoozed for a week on dismiss. -->
@@ -134,12 +139,30 @@ import MyNidoMenu from "../../components/MyNidoMenu.astro";
         <span class="chip acc"><span class="dot"></span> Testnet</span>
       </div>
 
+          <div id="send-funds-banner" class="span-all hidden" role="region" aria-label="Send funds to G Address">
+            <div class="alert warn" style="display:flex; align-items:center; gap:12px; margin:0 22px;">
+              <div style="flex:1; min-width:0;">
+                <div style="font-weight:700; font-size:14px;">Transfer funds to your temporary G address.</div>
+                <button id="copy-g-address-btn" class="addr addr-full" title="Copy G address">
+                  <code id="g-address" style="background:none; padding:0;"></code>
+                  <span class="copy-ico" aria-hidden="true"><Icon name="copy" size={15} color="var(--ink-soft)" /></span>
+                  <span class="copy-check" aria-hidden="true"><Icon name="check" size={15} color="var(--good)" /></span>
+                </button>
+
+
+                <br>
+                <div class="mut" style="font-size:12.5px; line-height:1.4;">The funds will then be automatically sent to your contract address.</div>
+              </div>
+            </div>
+          </div>
+
       <!-- balance — primary hero. Mobile/tablet: centered balance + the circular
            quick actions below. Desktop (≥1024): a horizontal card with balance +
            address on the left and Send / Receive on the right. -->
       <div class="span-all home-hero" style="padding:14px 22px 0; text-align:center;">
         <div class="home-hero-bal">
           <div class="mut" style="font-size:13px; font-weight:700;">Balance</div>
+          
           <div class="disp" id="xlm-balance" style="font-weight:800; font-size:48px; letter-spacing:-.01em; line-height:1.04; margin-top:4px;">…</div>
           <div class="mut" style="font-size:14px; font-weight:600; margin-top:2px;">In your Nido</div>
           <!-- Claim a name — coral CTA sitting directly above the contract
@@ -331,7 +354,9 @@ import MyNidoMenu from "../../components/MyNidoMenu.astro";
   import { formatXlm } from "../../lib/money";
   import { fetchXlmBalance } from "../../lib/balance";
   import { checkPasskeySupport } from "../../lib/passkeySupport";
-
+  import { loadEphemeralGAddress } from "../../lib/ephemeralG";
+  import { mnemonicPath } from "@creit.tech/stellar-wallets-kit";
+  import { triggerSweep } from "../../lib/sweep"
   const RPC_URL = "https://soroban-testnet.stellar.org";
 
   // The on-page "Your name" / "Claim a name" card. Was parked while the claim
@@ -356,6 +381,7 @@ import MyNidoMenu from "../../components/MyNidoMenu.astro";
 
   const hostname = window.location.hostname;
   let contractId = contractIdFromHostname(hostname);
+  let gAddress = loadEphemeralGAddress(contractId);
   const rpId = hostname;
 
   // Point every home link (tagged data-home-apex — here the topbar mark; the
@@ -572,6 +598,7 @@ import MyNidoMenu from "../../components/MyNidoMenu.astro";
     url.searchParams.delete("namepasskey");
     window.history.replaceState({}, "", `${url.pathname}${url.search}${url.hash}`);
   }
+  
 
   function initAccountCard() {
     // Show the FULL contract address (not a truncated 6…6 form) so the
@@ -599,6 +626,25 @@ import MyNidoMenu from "../../components/MyNidoMenu.astro";
         toast("Couldn't copy — try selecting it manually");
       }
     });
+
+    const $copyGAddressBtn = document.getElementById("copy-g-address-btn") as HTMLButtonElement;
+    $copyGAddressBtn.addEventListener("click", async () => {
+      if (!gAddress) return;
+      try {
+        await navigator.clipboard.writeText(gAddress);
+        toast({ msg: "Copied the G address", icon: "check" });
+        flashCopied($copyGAddressBtn);
+      } catch {
+        toast("Couldn't copy — try selecting it manually");
+      }
+    });
+
+    const $sweepButton = document.getElementById("sweep-button") as HTMLButtonElement;
+    $sweepButton.addEventListener("click", () => {
+      console.log("triggering sweep")
+      triggerSweep(contractId, gAddress, 1);
+    });
+    
   }
 
   // Briefly flip a copy button into its "copied" check state (the CSS toggles
@@ -637,6 +683,8 @@ import MyNidoMenu from "../../components/MyNidoMenu.astro";
       banner.classList.add("hidden");
     });
   }
+
+
 
   function initHomeMode() {
     showHomeDashboard();
@@ -847,6 +895,19 @@ import MyNidoMenu from "../../components/MyNidoMenu.astro";
     fetchXlmBalance(contractId).then((balance) => {
       // Friendly grouping via money.formatXlm; keep the XLM figure truthful
       // (no fabricated fiat "$" balance — that was the prototype's mock).
+      
+      // if newly created contract, and the balance is 0, have a message for the user saying transfer money to G
+      // also check that the G is still active before displaying this!
+
+      const gAddress = loadEphemeralGAddress(contractId);
+      console.log("gAddress ", gAddress);
+      if (gAddress) {
+          const $sendFundsBanner = document.getElementById("send-funds-banner")!;
+          const $gAddress = document.getElementById("g-address")!;
+          $gAddress.innerHTML = `${gAddress}`;
+          $sendFundsBanner.classList.remove("hidden");
+      }
+
       const friendly = formatXlm(balance);
       $balance.innerHTML = `${friendly} <span class="mut" style="font-size:24px;">XLM</span>`;
     }).catch(() => {
