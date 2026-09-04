@@ -1217,6 +1217,7 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
   }
 
   async function preauthSweepPolicyFlow(sourceAccount: Account, g: Keypair, c: String): Promise<void> {
+      saveEphemeralGAddress(c, g.publicKey());
       // create an allowance from G to C via `approve(G, C, MAX, expiry)`
       const allowanceHash = await grantGAllowanceToC(sourceAccount, g, c);
 
@@ -1226,13 +1227,12 @@ import PasskeySheet from "../../components/PasskeySheet.astro";
       console.log("allowance tx hash: ", allowanceHash, "\nneutralize G tx hash: ", neutralizeHash)
 
 
-      await sleep(5000);
+      await sleep(10000);
       const installSweep = await installSweepPolicy(c, g);
 
       // Install the sweep policy on C - need the user to sign with their passkey
       // not sure exactly how to do this from a UI perspecive, but im sure its in 
       // this file somewhere
-      saveEphemeralGAddress(c, g.publicKey());
 
 
       // EE TODO: better error handling!!!

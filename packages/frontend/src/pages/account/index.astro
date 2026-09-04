@@ -111,6 +111,11 @@ import MyNidoMenu from "../../components/MyNidoMenu.astro";
     <!-- ============================================================= -->
     <div id="home-mode" class="hidden screen-in home-mode">
       <div class="card-grid">
+
+      <div id="trigger-sweep">
+          <button id="sweep-button" type="button" aria-label="Trigger sweep" class="btn acc sm" style="flex:0 0 auto;">Trigger Sweep</button>
+      </div>
+
       <!-- Recovery-backup prompt: enrollment is chain-invisible by design, so
            this shows off a LOCAL advisory flag (recoveryBackupPrompt.ts) —
            hidden once a backup is recorded, snoozed for a week on dismiss. -->
@@ -349,8 +354,9 @@ import MyNidoMenu from "../../components/MyNidoMenu.astro";
   import { formatXlm } from "../../lib/money";
   import { fetchXlmBalance } from "../../lib/balance";
   import { checkPasskeySupport } from "../../lib/passkeySupport";
-  import { loadEphemeralGAddress } from "../../lib/ephemeralG.js";
-import { mnemonicPath } from "@creit.tech/stellar-wallets-kit";
+  import { loadEphemeralGAddress } from "../../lib/ephemeralG";
+  import { mnemonicPath } from "@creit.tech/stellar-wallets-kit";
+  import { triggerSweep } from "../../lib/sweep"
   const RPC_URL = "https://soroban-testnet.stellar.org";
 
   // The on-page "Your name" / "Claim a name" card. Was parked while the claim
@@ -375,6 +381,7 @@ import { mnemonicPath } from "@creit.tech/stellar-wallets-kit";
 
   const hostname = window.location.hostname;
   let contractId = contractIdFromHostname(hostname);
+  let gAddress = loadEphemeralGAddress(contractId);
   const rpId = hostname;
 
   // Point every home link (tagged data-home-apex — here the topbar mark; the
@@ -621,16 +628,23 @@ import { mnemonicPath } from "@creit.tech/stellar-wallets-kit";
     });
 
     const $copyGAddressBtn = document.getElementById("copy-g-address-btn") as HTMLButtonElement;
-    $copyBtn.addEventListener("click", async () => {
-      if (!contractId) return;
+    $copyGAddressBtn.addEventListener("click", async () => {
+      if (!gAddress) return;
       try {
-        await navigator.clipboard.writeText(contractId);
-        toast({ msg: "Copied your address", icon: "check" });
-        flashCopied($copyBtn);
+        await navigator.clipboard.writeText(gAddress);
+        toast({ msg: "Copied the G address", icon: "check" });
+        flashCopied($copyGAddressBtn);
       } catch {
         toast("Couldn't copy — try selecting it manually");
       }
     });
+
+    const $sweepButton = document.getElementById("sweep-button") as HTMLButtonElement;
+    $sweepButton.addEventListener("click", () => {
+      console.log("triggering sweep")
+      triggerSweep(contractId, gAddress, 1);
+    });
+    
   }
 
   // Briefly flip a copy button into its "copied" check state (the CSS toggles
@@ -669,6 +683,8 @@ import { mnemonicPath } from "@creit.tech/stellar-wallets-kit";
       banner.classList.add("hidden");
     });
   }
+
+
 
   function initHomeMode() {
     showHomeDashboard();
@@ -874,7 +890,6 @@ import { mnemonicPath } from "@creit.tech/stellar-wallets-kit";
   document.getElementById("receive-address")!.textContent = contractId || "(unknown)";
 
   // Fetch balance in background — REAL XLM, no fabricated fiat figure.
-  // const $gAddress = document.getElementById("g-address")!;
   const $balance = document.getElementById("xlm-balance")!;
   if (contractId) {
     fetchXlmBalance(contractId).then((balance) => {
